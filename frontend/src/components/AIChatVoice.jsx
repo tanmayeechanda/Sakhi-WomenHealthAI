@@ -1,7 +1,8 @@
 // frontend/src/components/AIChatVoice.jsx
 import React, { useState, useEffect, useRef } from "react";
+import { MicIcon, SendIcon } from "./Icons";
 
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
 
 export default function AIChatVoice() {
   const [messages, setMessages] = useState([
@@ -13,7 +14,7 @@ export default function AIChatVoice() {
     {
       role: "assistant",
       content:
-        "For example, you can say things like:\n• “Fix an appointment with Dr Sricharan on 11 December 2025 at 12 pm”\n• “Write in my diary that I felt very anxious in class today”\n• “Which doctor should I see for heavy periods in Hyderabad?”\n• “My period started today”\n• “I feel very low and lonely today”",
+        "For example, you can say things like:\n• “Book an appointment with Dr Rao next Tuesday at 4 pm”\n• “Write in my diary that I felt very anxious in class today”\n• “Which doctor should I see for heavy periods in Hyderabad?”\n• “My period started yesterday”\n• “I feel very low and lonely today”",
     },
   ]);
   const [listening, setListening] = useState(false);
@@ -195,73 +196,28 @@ export default function AIChatVoice() {
 
   /* --------------------------- UI ------------------- */
   return (
-    <div
-      style={{
-        padding: 20,
-        maxWidth: 800,
-        margin: "0 auto",
-        fontFamily: "Poppins, system-ui, sans-serif",
-      }}
-    >
-      <h2
-        style={{
-          textAlign: "center",
-          marginBottom: 10,
-          color: "#6b21a8",
-          fontWeight: 600,
-        }}
-      >
-        💜 Wellness Voice Assistant
-      </h2>
+    <div className="stack">
+      <div className="page-header" style={{ marginBottom: 0 }}>
+        <h2>Wellness voice assistant</h2>
+        <p>
+          Talk to me like a friend, or ask me to book appointments, write in
+          your diary and more. Tap the mic to start.
+        </p>
+      </div>
 
       {/* Chat window */}
-      <div
-        style={{
-          height: 260,
-          overflowY: "auto",
-          padding: 12,
-          borderRadius: 16,
-          background: "#faf5ff",
-          boxShadow: "0 4px 10px rgba(0,0,0,0.08)",
-        }}
-      >
+      <div className="chat-log" aria-live="polite">
         {messages.map((m, i) => (
           <div
             key={i}
-            style={{
-              display: "flex",
-              justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-              margin: "6px 0",
-              animation: "fadeIn 0.25s ease",
-            }}
+            className={`msg ${m.role === "user" ? "msg-user" : "msg-bot"}`}
           >
-            <div
-              style={{
-                background: m.role === "user" ? "#dbeafe" : "#f3e8ff",
-                padding: "8px 12px",
-                borderRadius: 14,
-                maxWidth: "75%",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-                fontSize: 14,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {m.content}
-            </div>
+            {m.content}
           </div>
         ))}
 
         {typing && (
-          <div
-            style={{
-              marginTop: 8,
-              padding: "6px 10px",
-              background: "#f3e8ff",
-              borderRadius: 14,
-              width: 52,
-              animation: "fadeIn 0.2s ease",
-            }}
-          >
+          <div className="msg msg-bot" aria-label="Assistant is typing">
             <div className="typing-dots" />
           </div>
         )}
@@ -269,127 +225,59 @@ export default function AIChatVoice() {
 
       {/* Recognized text editor */}
       {pendingText && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: 10,
-            borderRadius: 12,
-            background: "#fef3c7",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 13,
-              marginBottom: 6,
-              color: "#92400e",
-              fontWeight: 500,
-            }}
-          >
-            Recognized text (you can edit before sending):
-          </div>
-          <textarea
-            value={pendingText}
-            onChange={(e) => setPendingText(e.target.value)}
-            rows={3}
-            style={{
-              width: "100%",
-              borderRadius: 8,
-              border: "1px solid #fbbf24",
-              padding: 6,
-              fontFamily: "inherit",
-              fontSize: 13,
-              resize: "vertical",
-            }}
-          />
-          <div
-            style={{
-              marginTop: 8,
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 8,
-            }}
-          >
+        <div className="card-muted stack-sm">
+          <label className="field">
+            <span className="field-label">
+              Recognized text (you can edit before sending)
+            </span>
+            <textarea
+              className="textarea"
+              value={pendingText}
+              onChange={(e) => setPendingText(e.target.value)}
+              rows={3}
+              style={{ minHeight: 80 }}
+            />
+          </label>
+          <div className="row-sm" style={{ justifyContent: "flex-end" }}>
             <button
-              onClick={handleSendPending}
-              style={{
-                flex: 1,
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "none",
-                background: "#4ade80",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Send ✅
-            </button>
-            <button
+              className="btn btn-ghost btn-sm"
               onClick={() => setPendingText("")}
-              style={{
-                flex: 1,
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "none",
-                background: "#fca5a5",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
             >
-              Clear ❌
+              Clear
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={handleSendPending}>
+              <SendIcon size={15} />
+              Send
             </button>
           </div>
         </div>
       )}
 
       {/* Mic button */}
-      <div style={{ textAlign: "center", marginTop: 18 }}>
+      <div className="row" style={{ justifyContent: "center" }}>
         <button
           onClick={startListening}
           disabled={listening}
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: "50%",
-            border: "none",
-            background: listening ? "#fb7185" : "#c084fc",
-            boxShadow: listening
-              ? "0 0 20px rgba(251, 113, 133, 0.7)"
-              : "0 0 14px rgba(192, 132, 252, 0.7)",
-            cursor: "pointer",
-            transition: "0.25s",
-          }}
+          className={`mic-btn${listening ? " is-listening" : ""}`}
+          style={{ width: 64, height: 64 }}
+          aria-label={listening ? "Listening…" : "Start speaking"}
         >
-          <span
-            style={{
-              fontSize: 30,
-              color: "white",
-              animation: listening ? "pulse 1s infinite" : "none",
-            }}
-          >
-            🎤
-          </span>
+          <MicIcon size={26} />
         </button>
+      </div>
+      <div className="text-center subtle text-sm" style={{ marginTop: -8 }}>
+        {listening ? "Listening…" : "Tap to speak"}
       </div>
 
       {/* How to talk to her (text hints, in case mic fails) */}
-      <div
-        style={{
-          marginTop: 12,
-          fontSize: 12,
-          color: "#6b7280",
-          background: "#eff6ff",
-          padding: 8,
-          borderRadius: 10,
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+      <div className="card-muted text-sm">
+        <div className="fw-600" style={{ marginBottom: 6 }}>
           You can say things like:
         </div>
-        <ul style={{ paddingLeft: 18, margin: 0, display: "grid", gap: 2 }}>
+        <ul className="muted" style={{ paddingLeft: 18, margin: 0, display: "grid", gap: 4 }}>
           <li>
-            <strong>Appointment:</strong> “Fix an appointment with Dr Sricharan
-            on 11 December 2025 at 12 pm”
+            <strong>Appointment:</strong> “Book an appointment with Dr Rao
+            next Tuesday at 4 pm”
           </li>
           <li>
             <strong>Diary:</strong> “Write in my diary that I felt very anxious
@@ -400,7 +288,8 @@ export default function AIChatVoice() {
             periods in Hyderabad?”
           </li>
           <li>
-            <strong>Periods:</strong> “My period started today”
+            <strong>Periods:</strong> “My period started yesterday” / “My
+            period ended today”
           </li>
           <li>
             <strong>Emotional:</strong> “I feel really low and lonely today”
@@ -410,23 +299,12 @@ export default function AIChatVoice() {
 
       <style>
         {`
-          @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.25); opacity: 0.85; }
-            100% { transform: scale(1); opacity: 1; }
-          }
-
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(4px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-
           .typing-dots {
             width: 36px;
             height: 8px;
             background: repeating-linear-gradient(
               to right,
-              #9d4edd 0 8px,
+              var(--accent) 0 8px,
               transparent 8px 12px
             );
             animation: blink 1s infinite;

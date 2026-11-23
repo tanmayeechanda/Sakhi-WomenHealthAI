@@ -27,3 +27,10 @@ build/
 # Temporary files
 *.log
 *.tmp
+
+# User uploads (medical reports, diary photos) — never commit these
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Local caches (OCR language data)
+backend/.cache/

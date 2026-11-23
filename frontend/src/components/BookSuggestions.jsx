@@ -1,6 +1,9 @@
 // frontend/src/components/BookSuggestions.jsx
 import React, { useEffect, useState } from "react";
 
+// Same convention as the rest of the app: REACT_APP_API_URL includes "/api"
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
+
 const MOOD_FILTERS = [
   { id: "all", label: "All moods" },
   { id: "sad", label: "Sad / low" },
@@ -43,7 +46,7 @@ function BookSuggestions({ mood }) {
     const queryMood =
       selectedMood && selectedMood !== "all" ? `?mood=${selectedMood}` : "";
 
-    fetch(`http://localhost:4000/api/resources/books${queryMood}`, {
+    fetch(`${API_BASE}/resources/books${queryMood}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -72,23 +75,18 @@ function BookSuggestions({ mood }) {
   }
 
   return (
-    <div>
-      <h2 style={{ marginTop: 0, marginBottom: 8 }}>Book Suggestions 📚</h2>
-      <p style={{ color: "#6b7280", marginBottom: 10, fontSize: 14 }}>
-        These are online book links or info pages. You can open them in a new
-        tab and choose the format you like (ebook, paperback, etc.).
-      </p>
+    <div className="stack">
+      <div>
+        <h3 className="card-title">Book suggestions 📚</h3>
+        <p className="card-subtitle m-0">
+          These are online book links or info pages. You can open them in a new
+          tab and choose the format you like (ebook, paperback, etc.).
+        </p>
+      </div>
 
       {/* Show internal mood filter only if parent didn't fix mood */}
       {!mood && (
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginBottom: 12,
-          }}
-        >
+        <div className="row-sm" role="group" aria-label="Filter by mood">
           {MOOD_FILTERS.map((m) => (
             <button
               key={m.id}
@@ -96,17 +94,8 @@ function BookSuggestions({ mood }) {
                 setSelectedMood(m.id);
                 setRefreshKey(0); // reset refresh when changing mood
               }}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                border: "none",
-                cursor: "pointer",
-                fontSize: 12,
-                background:
-                  selectedMood === m.id ? "#bfdbfe" : "rgba(191,219,254,0.6)",
-                fontWeight: selectedMood === m.id ? 600 : 500,
-                color: "#111827",
-              }}
+              className={`chip${selectedMood === m.id ? " is-active" : ""}`}
+              aria-pressed={selectedMood === m.id}
             >
               {m.label}
             </button>
@@ -114,120 +103,56 @@ function BookSuggestions({ mood }) {
         </div>
       )}
 
-      {loading && <p>Loading book suggestions…</p>}
-      {error && <p style={{ color: "red", fontSize: 13 }}>{error}</p>}
+      {loading && (
+        <div className="row-sm muted text-sm">
+          <div className="spinner" /> Loading book suggestions…
+        </div>
+      )}
+      {error && <div className="alert alert-error">{error}</div>}
 
       {!loading && !error && books.length === 0 && (
-        <p style={{ fontSize: 13, color: "#4b5563" }}>
+        <div className="empty-state">
           No book suggestions available right now. Try a different mood, or come
           back later.
-        </p>
+        </div>
       )}
 
       {!loading && !error && books.length > 0 && (
         <>
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            }}
-          >
+          <div className="grid-auto">
             {books.map((book) => (
-              <div
+              <button
                 key={book.id}
+                type="button"
+                className="tile stack-sm"
+                style={{ gap: 4 }}
                 onClick={() =>
                   window.open(book.url, "_blank", "noopener,noreferrer")
                 }
-                style={{
-                  borderRadius: 12,
-                  border: "1px solid #e5e7eb",
-                  padding: 12,
-                  backgroundColor: "#f9fafb",
-                  cursor: "pointer",
-                  transition: "transform 0.1s ease, box-shadow 0.1s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                  e.currentTarget.style.boxShadow =
-                    "0 4px 10px rgba(0,0,0,0.05)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "none";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
               >
-                <h3
-                  style={{
-                    margin: 0,
-                    marginBottom: 4,
-                    fontSize: 15,
-                    fontWeight: 600,
-                  }}
-                >
-                  {book.title}
-                </h3>
-                <p
-                  style={{
-                    margin: 0,
-                    marginBottom: 4,
-                    fontSize: 13,
-                    color: "#6b7280",
-                  }}
-                >
-                  by {book.author}
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    marginBottom: 4,
-                    fontSize: 13,
-                    color: "#4b5563",
-                  }}
-                >
-                  {book.description}
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    marginTop: 4,
-                    fontSize: 12,
-                    color: "#ec4899",
-                  }}
-                >
-                  Click to open ↗
-                </p>
-              </div>
+                <span className="fw-600">{book.title}</span>
+                <span className="subtle text-sm">by {book.author}</span>
+                <span className="muted text-sm">{book.description}</span>
+                <span className="text-xs fw-600" style={{ color: "var(--accent-ink)", marginTop: 4 }}>
+                  Open ↗
+                </span>
+              </button>
             ))}
           </div>
 
-          <button
-            onClick={handleAnotherSet}
-            disabled={loading}
-            style={{
-              marginTop: 10,
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: "none",
-              background: "#6366f1",
-              color: "white",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Show another set ✨
-          </button>
+          <div>
+            <button
+              onClick={handleAnotherSet}
+              disabled={loading}
+              className="btn btn-soft"
+            >
+              Show another set ✨
+            </button>
+          </div>
         </>
       )}
 
-      <p
-        style={{
-          fontSize: 11,
-          color: "#6b7280",
-          marginTop: 10,
-        }}
-      >
+      <p className="subtle text-xs m-0">
         Always choose what feels emotionally safe for you. If a book feels too
         heavy, it’s okay to stop reading. 💜
       </p>

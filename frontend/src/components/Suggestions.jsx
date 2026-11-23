@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import BookSuggestions from "./BookSuggestions";
 import GameSuggestions from "./GameSuggestions";
 
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
 
 const MOODS = [
   {

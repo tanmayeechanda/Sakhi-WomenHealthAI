@@ -7,8 +7,28 @@ const nodemailer = require("nodemailer");
 const User = require("../models/User");
 const { requireAuth } = require("../middleware/auth");
 const { OAuth2Client } = require("google-auth-library");
+const { rateLimit } = require("express-rate-limit");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const router = express.Router();
+
+/* ============================================================
+   Rate limiting: max 10 requests per 15 minutes per IP address.
+   Each route gets its own counter, so using "forgot password"
+   does not use up the login attempts.
+============================================================ */
+function createAuthLimiter(action) {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 10, // max 10 requests per window per IP
+    standardHeaders: "draft-8", // send RateLimit headers so clients know when to retry
+    legacyHeaders: false,
+    message: {
+      error: `Too many ${action} attempts. Please wait 15 minutes and try again.`,
+    },
+  });
+}
+const loginLimiter = createAuthLimiter("login");
+const forgotPasswordLimiter = createAuthLimiter("password reset");
 
 /* ============================================================
    Helper: create JWT for a user
@@ -56,6 +76,7 @@ router.post("/register", async (req, res) => {
       email,
       passwordHash,
       dob: dob ? new Date(dob) : undefined,
+      authProvider: "local",
     });
 
     const token = createToken(user);
@@ -78,7 +99,7 @@ router.post("/register", async (req, res) => {
 /* ============================================================
    POST /api/auth/login
 ============================================================ */
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     let { email, password } = req.body;
 
@@ -92,6 +113,11 @@ router.post("/login", async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    // Google accounts have no usable password – they must sign in with Google
+    if (user.authProvider === "google") {
+      return res.status(400).json({ error: "This account uses Google sign-in" });
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -122,7 +148,7 @@ router.post("/login", async (req, res) => {
    - We generate a reset token + expiry
    - Send email with reset link (or just log URL in dev)
 ============================================================ */
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", forgotPasswordLimiter, async (req, res) => {
   try {
     let { email } = req.body;
     if (!email) {
@@ -267,15 +293,33 @@ router.post("/google", async (req, res) => {
     let user = await User.findOne({ email });
 
     if (!user) {
-      // Create a new user with a random password hash (not used for login)
-      const bcrypt = require("bcrypt");
-      const fakePasswordHash = await bcrypt.hash("google-" + payload.sub, 10);
+      // Create a new Google user. The password is 32 random bytes that nobody
+      // knows, so this account can never be logged into with email + password.
+      const randomPassword = crypto.randomBytes(32).toString("hex");
+      const passwordHash = await bcrypt.hash(randomPassword, 10);
 
       user = await User.create({
         name,
         email,
-        passwordHash: fakePasswordHash,
+        passwordHash,
+        authProvider: "google",
       });
+    } else if (user.authProvider !== "google") {
+      // One-time migration: accounts created by the old code had the guessable
+      // password "google-<sub>". If that still matches, mark the account as a
+      // Google account and replace the password with a random one.
+      const isLegacyGoogleAccount = await bcrypt.compare(
+        "google-" + payload.sub,
+        user.passwordHash,
+      );
+      if (isLegacyGoogleAccount) {
+        user.passwordHash = await bcrypt.hash(
+          crypto.randomBytes(32).toString("hex"),
+          10,
+        );
+        user.authProvider = "google";
+        await user.save();
+      }
     }
 
     const token = createToken(user);

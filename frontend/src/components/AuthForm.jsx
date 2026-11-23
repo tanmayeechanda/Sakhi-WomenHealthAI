@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
+import { BrandIcon, DropIcon, MicIcon, ShieldIcon } from "./Icons";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
 
@@ -130,257 +131,180 @@ function AuthForm({ onAuthSuccess }) {
     setStatus("");
   }
 
+  const isSuccess = status.toLowerCase().includes("success");
+
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: "420px",
-        background: "white",
-        borderRadius: "16px",
-        padding: "24px",
-        boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
-      }}
-    >
-      <h1 style={{ textAlign: "center", marginBottom: "8px" }}>
-        Women&apos;s Health AI
-      </h1>
-      <p
-        style={{
-          textAlign: "center",
-          marginBottom: "16px",
-          fontSize: "0.9rem",
-        }}
-      >
-        {mode === "login"
-          ? "Login to continue tracking your cycle & chat with the AI."
-          : "Create your account to track your cycles and get AI support."}
-      </p>
+    <div className="auth-page">
+      <aside className="auth-aside">
+        <div className="brand">
+          <div className="brand-mark">
+            <BrandIcon size={18} />
+          </div>
+          <div className="brand-name">Women&apos;s Health AI</div>
+        </div>
 
-      {/* Login / Sign up toggle */}
-      <div style={{ display: "flex", marginBottom: "16px" }}>
-        <button
-          type="button"
-          onClick={() => switchMode("login")}
-          style={{
-            flex: 1,
-            padding: "8px",
-            borderRadius: "8px 0 0 8px",
-            border: "1px solid #e5e7eb",
-            background: mode === "login" ? "#2563eb" : "white",
-            color: mode === "login" ? "white" : "#111827",
-            cursor: "pointer",
-          }}
-        >
-          Login
-        </button>
-        <button
-          type="button"
-          onClick={() => switchMode("register")}
-          style={{
-            flex: 1,
-            padding: "8px",
-            borderRadius: "0 8px 8px 0",
-            border: "1px solid #e5e7eb",
-            borderLeft: "none",
-            background: mode === "register" ? "#2563eb" : "white",
-            color: mode === "register" ? "white" : "#111827",
-            cursor: "pointer",
-          }}
-        >
-          Sign up
-        </button>
-      </div>
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <div className="eyebrow">Your wellness companion</div>
+          <h2>Care that listens, every day of your cycle.</h2>
+          <p>
+            Track your cycle, journal how you feel, keep reports in one place
+            and talk things through with a gentle AI assistant.
+          </p>
+          <ul className="auth-features">
+            <li>
+              <span className="icon-bubble"><DropIcon size={16} /></span>
+              Cycle &amp; symptom tracking
+            </li>
+            <li>
+              <span className="icon-bubble"><MicIcon size={16} /></span>
+              Voice assistant that understands you
+            </li>
+            <li>
+              <span className="icon-bubble"><ShieldIcon size={16} /></span>
+              Your data stays private to your account
+            </li>
+          </ul>
+        </div>
 
-      {/* Main auth form */}
-      <form onSubmit={handleSubmit}>
-        {mode === "register" && (
-          <>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.9rem",
-              }}
+        <div className="subtle text-xs">
+          Not a substitute for professional medical advice.
+        </div>
+      </aside>
+
+      <main className="auth-main">
+        <div className="auth-card stack">
+          <div>
+            <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
+            <p className="muted m-0">
+              {mode === "login"
+                ? "Log in to continue tracking your cycle & chat with the AI."
+                : "Start tracking your cycles and get supportive AI guidance."}
+            </p>
+          </div>
+
+          {/* Login / Sign up toggle */}
+          <div className="segmented segmented-block" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "login"}
+              className={mode === "login" ? "is-active" : ""}
+              onClick={() => switchMode("login")}
             >
-              Name
+              Log in
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "register"}
+              className={mode === "register" ? "is-active" : ""}
+              onClick={() => switchMode("register")}
+            >
+              Sign up
+            </button>
+          </div>
+
+          {/* Main auth form */}
+          <form onSubmit={handleSubmit} className="stack">
+            {mode === "register" && (
+              <>
+                <label className="field">
+                  <span className="field-label">Name</span>
+                  <input
+                    className="input"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
+                    required
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field-label">
+                    Date of birth <span className="subtle">(optional)</span>
+                  </span>
+                  <input
+                    className="input"
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+
+            <label className="field">
+              <span className="field-label">Email</span>
               <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  marginTop: "4px",
-                  marginBottom: "8px",
-                  borderRadius: "8px",
-                  border: "1px solid #e5e7eb",
-                }}
+                className="input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                placeholder="you@example.com"
                 required
               />
             </label>
 
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.9rem",
-              }}
-            >
-              Date of Birth (optional)
+            <label className="field">
+              <span className="field-label">Password</span>
               <input
-                type="date"
-                value={dob}
-                onChange={(e) => setDob(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  marginTop: "4px",
-                  marginBottom: "8px",
-                  borderRadius: "8px",
-                  border: "1px solid #e5e7eb",
-                }}
+                className="input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                required
               />
             </label>
-          </>
-        )}
 
-        <label
-          style={{ display: "block", marginBottom: "8px", fontSize: "0.9rem" }}
-        >
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "8px",
-              marginTop: "4px",
-              marginBottom: "8px",
-              borderRadius: "8px",
-              border: "1px solid #e5e7eb",
-            }}
-            required
-          />
-        </label>
+            <button type="submit" className="btn btn-primary btn-lg btn-block">
+              {mode === "login" ? "Log in" : "Create account"}
+            </button>
+          </form>
 
-        <label
-          style={{ display: "block", marginBottom: "8px", fontSize: "0.9rem" }}
-        >
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "8px",
-              marginTop: "4px",
-              marginBottom: "8px",
-              borderRadius: "8px",
-              border: "1px solid #e5e7eb",
-            }}
-            required
-          />
-        </label>
+          {/* Main auth status */}
+          {status && (
+            <div className={`alert ${isSuccess ? "alert-success" : status === "Loading..." ? "alert-info" : "alert-error"}`} role="status">
+              {status}
+            </div>
+          )}
 
-        <button
-          type="submit"
-          style={{
-            width: "100%",
-            padding: "10px",
-            borderRadius: "999px",
-            border: "none",
-            background: "#2563eb",
-            color: "white",
-            fontWeight: "600",
-            cursor: "pointer",
-            marginTop: "8px",
-          }}
-        >
-          {mode === "login" ? "Login" : "Create account"}
-        </button>
-      </form>
+          <div className="divider-label" style={{ margin: 0 }}>or</div>
 
-      {/* Google Sign-in */}
-      <div
-        style={{
-          marginTop: "12px",
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-        <GoogleLogin
-          onSuccess={handleGoogleSuccess}
-          onError={handleGoogleError}
-          shape="pill"
-          text="continue_with"
-        />
-      </div>
+          {/* Google Sign-in */}
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              shape="pill"
+              text="continue_with"
+            />
+          </div>
 
-      {/* Main auth status */}
-      {status && (
-        <div
-          style={{
-            marginTop: "12px",
-            fontSize: "0.85rem",
-            color: status.toLowerCase().includes("success")
-              ? "#065f46"
-              : "#b91c1c",
-          }}
-        >
-          {status}
+          {/* Forgot password section */}
+          {mode === "login" && (
+            <div className="card-muted stack-sm">
+              <div className="fw-600 text-sm">Forgot your password?</div>
+              <form onSubmit={handleForgotPassword} className="row-sm">
+                <input
+                  className="input grow"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                />
+                <button type="submit" className="btn btn-soft">
+                  Send link
+                </button>
+              </form>
+              {resetStatus && <div className="text-sm muted">{resetStatus}</div>}
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Forgot password section */}
-      <div
-        style={{
-          marginTop: "16px",
-          paddingTop: "12px",
-          borderTop: "1px solid #e5e7eb",
-          fontSize: "0.85rem",
-        }}
-      >
-        <div style={{ marginBottom: "4px", fontWeight: 500 }}>
-          Forgot your password?
-        </div>
-        <form
-          onSubmit={handleForgotPassword}
-          style={{ display: "flex", gap: 8, marginTop: 4 }}
-        >
-          <input
-            type="email"
-            placeholder="Enter your email"
-            value={resetEmail}
-            onChange={(e) => setResetEmail(e.target.value)}
-            style={{
-              flex: 1,
-              padding: "6px 8px",
-              borderRadius: "8px",
-              border: "1px solid #e5e7eb",
-            }}
-            required
-          />
-          <button
-            type="submit"
-            style={{
-              padding: "6px 10px",
-              borderRadius: "999px",
-              border: "none",
-              background: "#6b21a8",
-              color: "white",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Reset
-          </button>
-        </form>
-        {resetStatus && (
-          <div style={{ marginTop: 4, color: "#4b5563" }}>{resetStatus}</div>
-        )}
-      </div>
+      </main>
     </div>
   );
 }

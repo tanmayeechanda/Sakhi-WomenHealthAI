@@ -72,52 +72,20 @@ function App() {
   const AppShell = () => {
     if (checkingToken) {
       return (
-        <div
-          style={{
-            minHeight: "100vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "linear-gradient(135deg, #ffe4ec, #e0f2fe)",
-            padding: 16,
-          }}
-        >
-          <div>Checking session...</div>
+        <div className="center-screen">
+          <div className="stack-sm" style={{ alignItems: "center" }}>
+            <div className="spinner" />
+            <div className="muted text-sm">Checking your session…</div>
+          </div>
         </div>
       );
     }
 
     if (!token) {
-      return (
-        <div
-          style={{
-            minHeight: "100vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "linear-gradient(135deg, #ffe4ec, #e0f2fe)",
-            padding: 16,
-          }}
-        >
-          <AuthForm onAuthSuccess={handleAuthSuccess} />
-        </div>
-      );
+      return <AuthForm onAuthSuccess={handleAuthSuccess} />;
     }
 
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "linear-gradient(135deg, #ffe4ec, #e0f2fe)",
-          padding: 16,
-        }}
-      >
-        <Dashboard user={user} token={token} onLogout={handleLogout} />
-      </div>
-    );
+    return <Dashboard user={user} token={token} onLogout={handleLogout} />;
   };
 
   return (

@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const PeriodEntry = require("../models/PeriodEntry");
 const { requireAuth } = require("../middleware/auth");
+const { getCycleStats } = require("../utils/cycle");
 
 /* ============================================================
    1) LOG PERIOD START (voice + UI)
@@ -27,7 +28,7 @@ router.post("/start", requireAuth, async (req, res) => {
     const entry = await PeriodEntry.create({
       user: req.user._id,
       startDate: today,
-      flow: req.body.flow || "medium",
+      flow: req.body.flow || "moderate",
       notes: req.body.notes || "",
     });
 
@@ -129,29 +130,12 @@ router.get("/history", requireAuth, async (req, res) => {
 ============================================================ */
 router.get("/current-phase", requireAuth, async (req, res) => {
   try {
-    // Get latest period start; adjust field names if your model differs
-    const last = await PeriodEntry.findOne({ user: req.user._id })
-      .sort({ startDate: -1, date: -1 })
+    // Uses the user's own history: groups logged days into periods and
+    // learns her average cycle length (falls back to 28 days if too little data)
+    const entries = await PeriodEntry.find({ user: req.user._id })
+      .select("startDate endDate")
       .lean();
-
-    if (!last) {
-      return res.json({ phase: "unknown", daysSinceStart: null });
-    }
-
-    const start = last.startDate || last.date || last.createdAt || new Date();
-
-    const now = new Date();
-    const diffMs = now - new Date(start);
-    const daysSinceStart = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
-
-    let phase = "unknown";
-    // very simple 28-day assumption
-    if (daysSinceStart <= 5) phase = "period";
-    else if (daysSinceStart <= 12) phase = "follicular";
-    else if (daysSinceStart <= 16) phase = "ovulation";
-    else if (daysSinceStart <= 28) phase = "luteal";
-
-    return res.json({ phase, daysSinceStart });
+    return res.json(getCycleStats(entries));
   } catch (err) {
     console.error("Current phase error:", err);
     res.status(500).json({ error: "Server error" });

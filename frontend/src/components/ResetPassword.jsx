@@ -1,8 +1,9 @@
 // frontend/src/components/ResetPassword.jsx
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { BrandIcon } from "./Icons";
 
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
 
 function ResetPassword() {
   const { token } = useParams();
@@ -40,93 +41,46 @@ function ResetPassword() {
     }
   }
 
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #ffe4ec, #e0f2fe)",
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          background: "white",
-          borderRadius: 16,
-          padding: 24,
-          boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
-        }}
-      >
-        <h2 style={{ textAlign: "center", marginBottom: 8 }}>
-          Reset your password
-        </h2>
-        <p
-          style={{
-            textAlign: "center",
-            marginBottom: 16,
-            fontSize: "0.9rem",
-            color: "#4b5563",
-          }}
-        >
-          Enter a new password for your account.
-        </p>
+  const isSuccess = status.toLowerCase().includes("success");
+  const isPending = status === "Updating password...";
 
-        <form onSubmit={handleSubmit}>
-          <label
-            style={{
-              display: "block",
-              marginBottom: 8,
-              fontSize: "0.9rem",
-            }}
-          >
-            New password
+  return (
+    <div className="center-screen">
+      <div className="card auth-card stack">
+        <div className="brand" style={{ padding: 0 }}>
+          <div className="brand-mark">
+            <BrandIcon size={18} />
+          </div>
+          <div className="brand-name">Women&apos;s Health AI</div>
+        </div>
+
+        <div>
+          <h1>Reset your password</h1>
+          <p className="muted m-0">Enter a new password for your account.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="stack">
+          <label className="field">
+            <span className="field-label">New password</span>
             <input
+              className="input"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 8,
-                marginTop: 4,
-                marginBottom: 8,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-              }}
+              autoComplete="new-password"
               required
             />
           </label>
 
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: 10,
-              borderRadius: 999,
-              border: "none",
-              background: "#2563eb",
-              color: "white",
-              fontWeight: 600,
-              cursor: "pointer",
-              marginTop: 8,
-            }}
-          >
+          <button type="submit" className="btn btn-primary btn-lg btn-block">
             Update password
           </button>
         </form>
 
         {status && (
           <div
-            style={{
-              marginTop: 12,
-              fontSize: "0.85rem",
-              color: status.toLowerCase().includes("success")
-                ? "#065f46"
-                : "#b91c1c",
-            }}
+            className={`alert ${isSuccess ? "alert-success" : isPending ? "alert-info" : "alert-error"}`}
+            role="status"
           >
             {status}
           </div>

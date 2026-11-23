@@ -1,7 +1,8 @@
 // frontend/src/components/Diary.jsx
 import React, { useState, useEffect, useMemo } from "react";
-const API_BASE = "http://localhost:4000/api";
-const SERVER_BASE = API_BASE.replace("/api", ""); // http://localhost:4000
+import { SecureImage } from "./SecureFile";
+
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
 
 const MOODS = [
   { key: "happy", label: "Happy", emoji: "😊" },
@@ -210,177 +211,112 @@ export default function Diary() {
   }, [entries, filterMood, filterCategory, search]);
 
   return (
-    <div style={{ marginTop: 12 }}>
+    <div className="stack-lg">
       {/* Header */}
-      <div
-        style={{
-          marginBottom: 12,
-          padding: 12,
-          borderRadius: 12,
-          background:
-            "linear-gradient(135deg, rgba(255,192,203,0.15), rgba(173,216,230,0.15))",
-        }}
-      >
-        <h3 style={{ margin: 0 }}>Your personal diary</h3>
-        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#555" }}>
+      <div className="page-header" style={{ marginBottom: 0 }}>
+        <h2>Your personal diary</h2>
+        <p>
           This is your safe place. You can also save special pictures from your
           day here 💗
         </p>
       </div>
 
       {/* New / Edit Entry */}
-      <div
-        style={{
-          border: "1px solid #eee",
-          padding: 12,
-          borderRadius: 12,
-          marginBottom: 16,
-          boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
-        }}
-      >
+      <div className="card-muted stack">
+        {editingId && (
+          <span className="badge badge-plum" style={{ alignSelf: "flex-start" }}>
+            Editing entry
+          </span>
+        )}
+
         {/* Title */}
         <input
+          className="input"
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Title for today (optional)…"
-          style={{
-            width: "100%",
-            padding: 8,
-            marginBottom: 8,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            fontSize: 14,
-          }}
+          aria-label="Entry title"
         />
 
         {/* Mood selector */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 6,
-            marginBottom: 8,
-          }}
-        >
-          <span style={{ fontSize: 13 }}>Today I feel:</span>
-          {MOODS.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => setMood(m.key)}
-              style={{
-                borderRadius: 16,
-                padding: "4px 10px",
-                border: mood === m.key ? "1px solid #e91e63" : "1px solid #ddd",
-                background: mood === m.key ? "#fde4ee" : "#fff",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
-              {m.emoji} {m.label}
-            </button>
-          ))}
+        <div className="stack-sm">
+          <span className="field-label">Today I feel</span>
+          <div className="row-sm" role="group" aria-label="Mood">
+            {MOODS.map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setMood(m.key)}
+                aria-pressed={mood === m.key}
+                className={`chip${mood === m.key ? " is-active" : ""}`}
+              >
+                <span aria-hidden="true">{m.emoji}</span> {m.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Category + Phase + Private */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 8,
-          }}
-        >
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            style={{
-              padding: 6,
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              fontSize: 13,
-            }}
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
+        <div className="grid-2">
+          <label className="field">
+            <span className="field-label">Category</span>
+            <select
+              className="select"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
 
-          <select
-            value={cyclePhase}
-            onChange={(e) => setCyclePhase(e.target.value)}
-            style={{
-              padding: 6,
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              fontSize: 13,
-            }}
-          >
-            {CYCLE_PHASES.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
-
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 13,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={isPrivate}
-              onChange={(e) => setIsPrivate(e.target.checked)}
-            />
-            🔒 Extra private
+          <label className="field">
+            <span className="field-label">Cycle phase</span>
+            <select
+              className="select"
+              value={cyclePhase}
+              onChange={(e) => setCyclePhase(e.target.value)}
+            >
+              {CYCLE_PHASES.map((p) => (
+                <option key={p}>{p}</option>
+              ))}
+            </select>
           </label>
         </div>
 
-        {/* File upload */}
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ fontSize: 13, color: "#555" }}>
-            Special picture(s) of today:
-          </label>
+        <label className="checkbox">
           <input
+            type="checkbox"
+            checked={isPrivate}
+            onChange={(e) => setIsPrivate(e.target.checked)}
+          />
+          🔒 Extra private
+        </label>
+
+        {/* File upload */}
+        <div className="field">
+          <span className="field-label">Special picture(s) of today</span>
+          <input
+            className="input"
             type="file"
             accept="image/*"
             multiple
             onChange={handlePhotosChange}
-            style={{ display: "block", marginTop: 4, fontSize: 13 }}
+            aria-label="Special pictures of today"
           />
           {photos.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                marginTop: 8,
-              }}
-            >
+            <div className="row-sm" style={{ marginTop: 4 }}>
               {photos.map((file, idx) => (
-                <div
+                <img
                   key={idx}
-                  style={{
-                    width: 70,
-                    height: 70,
-                    overflow: "hidden",
-                    borderRadius: 8,
-                  }}
-                >
-                  <img
-                    src={URL.createObjectURL(file)}
-                    alt="preview"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                </div>
+                  className="thumb"
+                  src={URL.createObjectURL(file)}
+                  alt="preview"
+                  width={70}
+                  height={70}
+                />
               ))}
             </div>
           )}
@@ -388,44 +324,23 @@ export default function Diary() {
 
         {/* Textarea */}
         <textarea
+          className="textarea"
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={6}
-          style={{
-            width: "100%",
-            padding: 8,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            resize: "vertical",
-          }}
+          aria-label="Diary entry"
           placeholder="Write about your day, your body, your thoughts, and what these pictures mean to you…"
         />
 
         {/* Buttons */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 8,
-          }}
-        >
-          <span style={{ fontSize: 12, color: "#777" }}>
-            {text.length} characters
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
+        <div className="row-between">
+          <span className="text-xs subtle">{text.length} characters</span>
+          <div className="row-sm">
             {editingId && (
               <button
                 type="button"
                 onClick={resetForm}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                  background: "#fff",
-                  cursor: "pointer",
-                  fontSize: 13,
-                }}
+                className="btn btn-ghost btn-sm"
               >
                 Cancel edit
               </button>
@@ -436,14 +351,7 @@ export default function Diary() {
                 setPhotos([]);
               }}
               type="button"
-              style={{
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                background: "#fff",
-                cursor: "pointer",
-                fontSize: 13,
-              }}
+              className="btn btn-secondary btn-sm"
             >
               Clear
             </button>
@@ -451,16 +359,7 @@ export default function Diary() {
               onClick={save}
               type="button"
               disabled={loading || !text.trim()}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "none",
-                background: "#e91e63",
-                color: "#fff",
-                cursor: loading || !text.trim() ? "not-allowed" : "pointer",
-                opacity: loading || !text.trim() ? 0.6 : 1,
-                fontSize: 13,
-              }}
+              className="btn btn-primary btn-sm"
             >
               {editingId
                 ? loading
@@ -475,197 +374,120 @@ export default function Diary() {
       </div>
 
       {/* Filters */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          marginBottom: 12,
-          alignItems: "center",
-        }}
-      >
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search in your diary…"
-          style={{
-            flex: "1 1 180px",
-            padding: 6,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            fontSize: 13,
-          }}
-        />
-        <select
-          value={filterMood}
-          onChange={(e) => setFilterMood(e.target.value)}
-          style={{
-            padding: 6,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            fontSize: 13,
-          }}
-        >
-          <option value="">All moods</option>
-          {MOODS.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          style={{
-            padding: 6,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            fontSize: 13,
-          }}
-        >
-          <option value="">All categories</option>
-          {CATEGORIES.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </div>
+      <div className="stack">
+        <div className="row-between">
+          <h3 className="m-0">Past entries</h3>
+          <span className="badge">{filteredEntries.length}</span>
+        </div>
+        <div className="row-sm">
+          <input
+            className="input"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search in your diary…"
+            aria-label="Search diary"
+            style={{ flex: "1 1 200px", width: "auto" }}
+          />
+          <select
+            className="select"
+            value={filterMood}
+            onChange={(e) => setFilterMood(e.target.value)}
+            aria-label="Filter by mood"
+            style={{ width: "auto" }}
+          >
+            <option value="">All moods</option>
+            {MOODS.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="select"
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            aria-label="Filter by category"
+            style={{ width: "auto" }}
+          >
+            <option value="">All categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </div>
 
-      {/* Entries list */}
-      <div style={{ marginTop: 8 }}>
+        {/* Entries list */}
         {filteredEntries.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#777" }}>
+          <div className="empty-state">
             No entries yet here. Your story (and your little memories) start
             whenever you are ready 💗
-          </p>
+          </div>
         ) : (
-          filteredEntries.map((e) => {
-            const moodMeta = MOODS.find((m) => m.key === e.mood);
-            return (
-              <div
-                key={e._id}
-                style={{
-                  padding: 10,
-                  border: "1px solid #eee",
-                  marginBottom: 8,
-                  borderRadius: 10,
-                  background: "#fff",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 4,
-                    alignItems: "center",
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#666" }}>
-                    {new Date(e.date || e.createdAt).toLocaleString()}
-                    {e.category && (
-                      <span style={{ marginLeft: 6 }}>• {e.category}</span>
-                    )}
-                    {e.cyclePhase && e.cyclePhase !== "Not sure" && (
-                      <span style={{ marginLeft: 6 }}>
-                        • {e.cyclePhase} phase
-                      </span>
-                    )}
-                    {e.private && <span> • 🔒</span>}
-                  </div>
-                  <div
-                    style={{ display: "flex", gap: 6, alignItems: "center" }}
-                  >
-                    {moodMeta && (
-                      <span title={moodMeta.label}>{moodMeta.emoji}</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(e)}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        fontSize: 12,
-                        cursor: "pointer",
-                        color: "#1976d2",
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(e._id)}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        fontSize: 12,
-                        cursor: "pointer",
-                        color: "#d32f2f",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {e.title && (
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      marginBottom: 4,
-                      fontSize: 14,
-                    }}
-                  >
-                    {e.title}
-                  </div>
-                )}
-
-                {/* Photos gallery */}
-                {e.photos && e.photos.length > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      marginBottom: 6,
-                      marginTop: 4,
-                    }}
-                  >
-                    {e.photos.map((p, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          width: 80,
-                          height: 80,
-                          overflow: "hidden",
-                          borderRadius: 8,
-                        }}
+          <ul className="list">
+            {filteredEntries.map((e) => {
+              const moodMeta = MOODS.find((m) => m.key === e.mood);
+              return (
+                <li key={e._id} className="list-item stack-sm">
+                  <div className="row-between">
+                    <div className="row-sm text-xs subtle">
+                      {moodMeta && (
+                        <span title={moodMeta.label} style={{ fontSize: "1.1rem" }}>
+                          {moodMeta.emoji}
+                        </span>
+                      )}
+                      <span>{new Date(e.date || e.createdAt).toLocaleString()}</span>
+                      {e.category && (
+                        <span className="badge badge-accent">{e.category}</span>
+                      )}
+                      {e.cyclePhase && e.cyclePhase !== "Not sure" && (
+                        <span className="badge badge-plum">
+                          {e.cyclePhase} phase
+                        </span>
+                      )}
+                      {e.private && <span title="Extra private">🔒</span>}
+                    </div>
+                    <div className="row-sm">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(e)}
+                        className="btn btn-ghost btn-sm"
                       >
-                        <img
-                          src={`${SERVER_BASE}${p}`}
-                          alt="memory"
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      </div>
-                    ))}
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(e._id)}
+                        className="btn btn-danger btn-sm"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                )}
 
-                <div
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    fontSize: 13,
-                    color: "#333",
-                  }}
-                >
-                  {e.text}
-                </div>
-              </div>
-            );
-          })
+                  {e.title && <h3 className="m-0">{e.title}</h3>}
+
+                  {/* Photos gallery */}
+                  {e.photos && e.photos.length > 0 && (
+                    <div className="row-sm">
+                      {e.photos.map((p, idx) => (
+                        <SecureImage
+                          key={idx}
+                          className="thumb"
+                          path={p}
+                          alt="memory"
+                          width={80}
+                          height={80}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="pre-wrap text-sm muted">{e.text}</div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </div>

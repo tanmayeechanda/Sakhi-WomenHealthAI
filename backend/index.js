@@ -14,6 +14,7 @@ const periodRoutes = require("./routes/period");
 const diaryRoutes = require("./routes/diary");
 const medicalRoutes = require("./routes/medical");
 const appointmentRoutes = require("./routes/appointments");
+const fileRoutes = require("./routes/files");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,9 +36,9 @@ const symptomRoutes = require("./routes/symptoms");
 app.use(cors());
 app.use(express.json());
 
-// 🔹 Serve uploaded files statically
-// e.g. http://localhost:4000/uploads/reports/<filename>
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// 🔒 Uploaded files are NOT served publicly any more.
+// They are served only to their owner via GET /api/files/:filename (see routes/files.js).
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API routes
 app.use("/api/auth", authRoutes);
@@ -49,6 +50,7 @@ app.use("/api/diary", diaryRoutes);
 app.use("/api/medical", medicalRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/symptoms", symptomRoutes);
+app.use("/api/files", fileRoutes); // owner-only file access
 
 // Health check
 app.get("/", (req, res) => {

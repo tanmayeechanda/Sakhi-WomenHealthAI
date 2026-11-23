@@ -1,8 +1,9 @@
 // frontend/src/components/WellnessPage.jsx
 import React, { useState, useEffect, useCallback } from "react";
 
-const API_BASE = "http://localhost:4000/api";
-const FILE_BASE = "http://localhost:4000";
+import { SecureFileButton } from "./SecureFile";
+
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
 
 function WellnessPage({ token }) {
   const [reports, setReports] = useState([]);
@@ -17,6 +18,8 @@ function WellnessPage({ token }) {
 
   const [aiFile, setAiFile] = useState(null);
   const [reportExplanation, setReportExplanation] = useState("");
+  const [reportFindings, setReportFindings] = useState([]);
+  const [reportNotice, setReportNotice] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
 
   const [doctorIssue, setDoctorIssue] = useState("");
@@ -177,6 +180,8 @@ function WellnessPage({ token }) {
     try {
       setAiLoading(true);
       setReportExplanation("");
+      setReportFindings([]);
+      setReportNotice("");
       const res = await fetch(`${API_BASE}/ai/report-explain-file`, {
         method: "POST",
         headers: {
@@ -190,7 +195,11 @@ function WellnessPage({ token }) {
         alert(data.error || "Error explaining report");
         return;
       }
-      setReportExplanation(data.explanation);
+      setReportExplanation(data.explanation || "");
+      setReportFindings(Array.isArray(data.findings) ? data.findings : []);
+      setReportNotice(data.safeNotice || "");
+    } catch (err) {
+      alert("Couldn't reach the server. Please try again.");
     } finally {
       setAiLoading(false);
     }
@@ -335,600 +344,686 @@ function WellnessPage({ token }) {
   const totalReports = reports.length;
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      {/* 0. Wellness snapshot */}
-      <div
-        style={{
-          padding: 16,
-          borderRadius: 16,
-          background:
-            "linear-gradient(135deg, rgba(219,234,254,0.9), rgba(255,228,230,0.9))",
-          border: "1px solid #bfdbfe",
-          fontSize: 14,
-        }}
-      >
-        <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
-          Today’s wellness snapshot
-        </div>
-        <div style={{ marginBottom: 4 }}>
-          <strong>Next appointment: </strong>
-          {nextAppt ? (
-            <>
-              {nextAppt.doctorName || "Your doctor"} on{" "}
-              {new Date(nextAppt.dateTime).toLocaleString()}{" "}
-              {nextAppt.specialty && `(${nextAppt.specialty})`}
-            </>
-          ) : (
-            "You haven’t added a next appointment yet."
-          )}
-        </div>
-        <div style={{ marginBottom: 4 }}>
-          <strong>Saved reports: </strong>
-          {totalReports === 0
-            ? "No reports saved yet."
-            : totalReports === 1
-            ? "1 report"
-            : `${totalReports} reports`}
-        </div>
-        <div style={{ marginBottom: 4 }}>
-          <strong>Cycle phase (approx): </strong>
-          {phaseLoading
-            ? "Checking your logs…"
-            : currentPhaseInfo?.phase && currentPhaseInfo.phase !== "unknown"
-            ? `${currentPhaseInfo.phase} phase`
-            : "Not sure yet – you can log your periods in the Period Tracker."}
-        </div>
-        <div style={{ fontSize: 12, marginTop: 4, color: "#374151" }}>
-          This space is here to help you feel organised and supported. It
-          doesn’t replace a real doctor, but it can remind you that you’re
-          taking care of yourself 💗
-        </div>
+    <div className="stack-lg">
+      <div className="page-header" style={{ marginBottom: 0 }}>
+        <h2>Personal wellness</h2>
+        <p>
+          Your reports, symptoms, appointments and gentle guidance, all in one
+          organised place.
+        </p>
       </div>
 
-      {/* 1. Medical reports */}
-      <section
-        style={{
-          padding: 12,
-          borderRadius: 12,
-          border: "1px solid #e5e7eb",
-          background: "#f9fafb",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Medical reports</h3>
-        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>
-          Keep your important reports in one place. You can store what it was
-          about, which doctor you met, and any notes you want to remember.
-        </p>
-
-        <form
-          onSubmit={handleReportSubmit}
-          style={{ display: "grid", gap: 8, marginBottom: 12 }}
-        >
-          <input
-            type="text"
-            placeholder="Report title (e.g. Blood Test – Jan 2025)"
-            value={reportForm.title}
-            onChange={(e) =>
-              setReportForm({ ...reportForm, title: e.target.value })
-            }
-          />
-          <input
-            type="date"
-            value={reportForm.date}
-            onChange={(e) =>
-              setReportForm({ ...reportForm, date: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="Doctor name"
-            value={reportForm.doctorName}
-            onChange={(e) =>
-              setReportForm({ ...reportForm, doctorName: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="Hospital / clinic"
-            value={reportForm.hospital}
-            onChange={(e) =>
-              setReportForm({ ...reportForm, hospital: e.target.value })
-            }
-          />
-          <textarea
-            rows={3}
-            placeholder="Notes / what the doctor explained (optional)"
-            value={reportForm.notes}
-            onChange={(e) =>
-              setReportForm({ ...reportForm, notes: e.target.value })
-            }
-          />
-          <input
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-            onChange={(e) => setReportFile(e.target.files[0] || null)}
-          />
-          <button
-            type="submit"
-            disabled={!reportForm.title || !reportForm.date || !reportFile}
-          >
-            Save report
-          </button>
-        </form>
-
-        {/* Reports filter */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 8,
-            alignItems: "center",
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Search in reports (title / notes)…"
-            value={reportSearch}
-            onChange={(e) => setReportSearch(e.target.value)}
-            style={{
-              flex: "1 1 150px",
-              padding: 6,
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              fontSize: 13,
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Filter by doctor name"
-            value={reportDoctorFilter}
-            onChange={(e) => setReportDoctorFilter(e.target.value)}
-            style={{
-              flex: "0 0 160px",
-              padding: 6,
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              fontSize: 13,
-            }}
-          />
-        </div>
-
-        <div>
-          <h4 style={{ marginBottom: 6 }}>Saved reports</h4>
-          {loadingReports && (
-            <p style={{ fontSize: 13, color: "#6b7280" }}>Loading reports…</p>
-          )}
-          {!loadingReports && filteredReports.length === 0 && (
-            <p style={{ fontSize: 13, color: "#6b7280" }}>
-              No reports match these filters yet.
-            </p>
-          )}
-          {filteredReports.map((r) => (
-            <div
-              key={r._id}
-              style={{
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                marginBottom: 8,
-                background: "white",
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{r.title}</div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                {r.date && new Date(r.date).toLocaleDateString()}{" "}
-                {r.doctorName && `· Dr. ${r.doctorName}`}
+      {/* 0. Wellness snapshot */}
+      <section className="stack-sm">
+        <div className="eyebrow">Today’s wellness snapshot</div>
+        <div className="grid-auto">
+          <div className="stat">
+            <div className="stat-label">Next appointment</div>
+            <div className="text-sm" style={{ marginTop: 6 }}>
+              {nextAppt ? (
+                <>
+                  <span className="fw-600">
+                    {nextAppt.doctorName || "Your doctor"}
+                  </span>{" "}
+                  on {new Date(nextAppt.dateTime).toLocaleString()}{" "}
+                  {nextAppt.specialty && (
+                    <span className="muted">({nextAppt.specialty})</span>
+                  )}
+                </>
+              ) : (
+                <span className="muted">
+                  You haven’t added a next appointment yet.
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">Saved reports</div>
+            <div className="stat-value">{totalReports}</div>
+            <div className="text-xs subtle">
+              {totalReports === 0
+                ? "No reports saved yet."
+                : totalReports === 1
+                ? "1 report"
+                : `${totalReports} reports`}
+            </div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">Cycle phase (approx)</div>
+            {phaseLoading ? (
+              <div className="text-sm muted" style={{ marginTop: 6 }}>
+                Checking your logs…
               </div>
-              {r.hospital && (
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {r.hospital}
-                </div>
-              )}
-              {r.notes && (
-                <div style={{ marginTop: 4, fontSize: 13 }}>{r.notes}</div>
-              )}
-              {r.filePath && (
-                <div style={{ marginTop: 4 }}>
-                  <a
-                    href={`${FILE_BASE}${r.filePath}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ fontSize: 12, color: "#2563eb" }}
-                  >
-                    View report file
-                  </a>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 2. AI explanation */}
-      <section
-        style={{
-          padding: 12,
-          borderRadius: 12,
-          border: "1px solid #e5e7eb",
-          background: "#f9fafb",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>
-          Understand your report (AI explanation)
-        </h3>
-        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>
-          Upload a medical report file (PDF, image, or document). The AI will
-          give you a gentle, general guide on how to read it. It{" "}
-          <strong>cannot diagnose or replace your doctor</strong>.
-        </p>
-
-        <input
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-          onChange={(e) => setAiFile(e.target.files[0] || null)}
-          style={{ marginBottom: 8 }}
-        />
-
-        <button onClick={handleExplainReport} disabled={!aiFile || aiLoading}>
-          {aiLoading ? "Explaining…" : "Explain my report"}
-        </button>
-
-        {reportExplanation && (
-          <pre
-            style={{
-              whiteSpace: "pre-wrap",
-              marginTop: 8,
-              padding: 8,
-              borderRadius: 8,
-              background: "white",
-              border: "1px solid #e5e7eb",
-              fontSize: 13,
-            }}
-          >
-            {reportExplanation}
-          </pre>
-        )}
-      </section>
-
-      {/* 3. Doctor suggestions */}
-      <section
-        style={{
-          padding: 12,
-          borderRadius: 12,
-          border: "1px solid #e5e7eb",
-          background: "#f9fafb",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Find the right type of doctor</h3>
-        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>
-          Tell me what you’re mainly struggling with, and I’ll suggest{" "}
-          <strong>which kind of specialist</strong> might be suitable to talk
-          to. If you add your city, I’ll also give you quick search links to
-          find top-rated doctors near you.
-        </p>
-        <input
-          type="text"
-          placeholder="Main issue (e.g. heavy periods, PCOS, anxiety, hair fall, fever)"
-          value={doctorIssue}
-          onChange={(e) => setDoctorIssue(e.target.value)}
-          style={{ width: "100%", marginBottom: 8 }}
-        />
-        <input
-          type="text"
-          placeholder="Your city (e.g. Hyderabad, Noida)"
-          value={doctorCity}
-          onChange={(e) => setDoctorCity(e.target.value)}
-          style={{ width: "100%", marginBottom: 8 }}
-        />
-        <button
-          onClick={handleDoctorSuggest}
-          disabled={!doctorIssue.trim() || doctorLoading}
-        >
-          {doctorLoading ? "Thinking…" : "Suggest doctor type & search links"}
-        </button>
-
-        {doctorSuggestion && (
-          <div
-            style={{
-              marginTop: 8,
-              padding: 8,
-              borderRadius: 8,
-              background: "white",
-              border: "1px solid #e5e7eb",
-              fontSize: 13,
-            }}
-          >
-            <div>
-              <strong>Suggested specialty:</strong> {doctorSuggestion.specialty}
-            </div>
-            <p style={{ marginTop: 4 }}>{doctorSuggestion.message}</p>
-
-            {doctorSuggestion.searchLinks && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
-                  Where you can search for top-rated doctors:
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 8,
-                    marginBottom: 4,
-                  }}
-                >
-                  {doctorSuggestion.searchLinks.googleSearchUrl && (
-                    <a
-                      href={doctorSuggestion.searchLinks.googleSearchUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        fontSize: 12,
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        border: "1px solid #d1d5db",
-                        textDecoration: "none",
-                      }}
-                    >
-                      Google Search
-                    </a>
-                  )}
-                  {doctorSuggestion.searchLinks.googleMapsUrl && (
-                    <a
-                      href={doctorSuggestion.searchLinks.googleMapsUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        fontSize: 12,
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        border: "1px solid #d1d5db",
-                        textDecoration: "none",
-                      }}
-                    >
-                      Google Maps
-                    </a>
-                  )}
-                  {doctorSuggestion.searchLinks.practoSearchUrl && (
-                    <a
-                      href={doctorSuggestion.searchLinks.practoSearchUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        fontSize: 12,
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        border: "1px solid #d1d5db",
-                        textDecoration: "none",
-                      }}
-                    >
-                      Practo
-                    </a>
-                  )}
-                </div>
-                {doctorSuggestion.note && (
-                  <p style={{ fontSize: 11, color: "#6b7280" }}>
-                    {doctorSuggestion.note}
-                  </p>
+            ) : currentPhaseInfo?.phase &&
+              currentPhaseInfo.phase !== "unknown" ? (
+              <div
+                className="stat-value"
+                style={{ textTransform: "capitalize" }}
+              >
+                {currentPhaseInfo.phaseLabel || `${currentPhaseInfo.phase} phase`}
+                {currentPhaseInfo.dayOfCycle && (
+                  <div className="text-xs subtle" style={{ textTransform: "none", fontFamily: "var(--font-body)", fontWeight: 400 }}>
+                    Day {currentPhaseInfo.dayOfCycle} of your cycle
+                  </div>
                 )}
+              </div>
+            ) : (
+              <div className="text-sm muted" style={{ marginTop: 6 }}>
+                Not sure yet – you can log your periods in the Period Tracker.
               </div>
             )}
           </div>
-        )}
+        </div>
+        <p className="text-xs subtle m-0">
+          This space is here to help you feel organised and supported. It
+          doesn’t replace a real doctor, but it can remind you that you’re
+          taking care of yourself 💗
+        </p>
       </section>
 
-      {/* 4. Comfort suggestions (non-medical), auto phase */}
-      <section
-        style={{
-          padding: 12,
-          borderRadius: 12,
-          border: "1px solid #e5e7eb",
-          background: "#f9fafb",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Comfort suggestions (not a cure)</h3>
-        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>
-          These are gentle ideas to make you a bit more comfortable (like rest,
-          warmth, hydration). They are <strong>not treatment</strong> – always
-          follow medical advice.
-        </p>
-        <input
-          type="text"
-          placeholder="Symptom (e.g. cramps, bloating, low mood, fatigue)"
-          value={remedySymptom}
-          onChange={(e) => setRemedySymptom(e.target.value)}
-          style={{ width: "100%", marginBottom: 8 }}
-        />
-        <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7280" }}>
-          Phase (auto-picked from your period logs, but you can change it):
+      {/* 1. Medical reports */}
+      <section className="card-muted stack">
+        <div>
+          <h3 className="card-title">Medical reports</h3>
+          <p className="card-subtitle m-0">
+            Keep your important reports in one place. You can store what it was
+            about, which doctor you met, and any notes you want to remember.
+          </p>
         </div>
-        <select
-          value={remedyPhase}
-          onChange={(e) => setRemedyPhase(e.target.value)}
-          style={{ marginBottom: 8 }}
-        >
-          <option value="period">On period</option>
-          <option value="follicular">Follicular phase</option>
-          <option value="ovulation">Ovulation</option>
-          <option value="luteal">Luteal (PMS)</option>
-        </select>
-        <button
-          onClick={handleRemedySuggest}
-          disabled={!remedySymptom.trim() || remedyLoading}
-        >
-          {remedyLoading ? "Gathering tips…" : "Get comfort tips"}
-        </button>
-        {remedyResult && (
-          <div
-            style={{
-              marginTop: 8,
-              padding: 8,
-              borderRadius: 8,
-              background: "white",
-              border: "1px solid #e5e7eb",
-              fontSize: 13,
-            }}
+
+        <form onSubmit={handleReportSubmit} className="stack">
+          <div className="grid-2">
+            <label className="field">
+              <span className="field-label">Report title</span>
+              <input
+                className="input"
+                type="text"
+                placeholder="Report title (e.g. Blood Test – Jan 2025)"
+                value={reportForm.title}
+                onChange={(e) =>
+                  setReportForm({ ...reportForm, title: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Date</span>
+              <input
+                className="input"
+                type="date"
+                value={reportForm.date}
+                onChange={(e) =>
+                  setReportForm({ ...reportForm, date: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Doctor</span>
+              <input
+                className="input"
+                type="text"
+                placeholder="Doctor name"
+                value={reportForm.doctorName}
+                onChange={(e) =>
+                  setReportForm({ ...reportForm, doctorName: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Hospital / clinic</span>
+              <input
+                className="input"
+                type="text"
+                placeholder="Hospital / clinic"
+                value={reportForm.hospital}
+                onChange={(e) =>
+                  setReportForm({ ...reportForm, hospital: e.target.value })
+                }
+              />
+            </label>
+          </div>
+          <label className="field">
+            <span className="field-label">
+              Notes <span className="subtle">(optional)</span>
+            </span>
+            <textarea
+              className="textarea"
+              rows={3}
+              placeholder="Notes / what the doctor explained (optional)"
+              value={reportForm.notes}
+              onChange={(e) =>
+                setReportForm({ ...reportForm, notes: e.target.value })
+              }
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Report file</span>
+            <input
+              className="input"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              onChange={(e) => setReportFile(e.target.files[0] || null)}
+            />
+          </label>
+          <div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={!reportForm.title || !reportForm.date || !reportFile}
+            >
+              Save report
+            </button>
+          </div>
+        </form>
+
+        <hr className="divider" style={{ margin: 0 }} />
+
+        <div className="stack-sm">
+          <h4 className="m-0">Saved reports</h4>
+
+          {/* Reports filter */}
+          <div className="row-sm">
+            <input
+              className="input"
+              type="text"
+              placeholder="Search in reports (title / notes)…"
+              aria-label="Search reports"
+              value={reportSearch}
+              onChange={(e) => setReportSearch(e.target.value)}
+              style={{ flex: "1 1 200px", width: "auto" }}
+            />
+            <input
+              className="input"
+              type="text"
+              placeholder="Filter by doctor name"
+              aria-label="Filter by doctor name"
+              value={reportDoctorFilter}
+              onChange={(e) => setReportDoctorFilter(e.target.value)}
+              style={{ flex: "0 1 200px", width: "auto" }}
+            />
+          </div>
+
+          {loadingReports && (
+            <p className="text-sm muted m-0">Loading reports…</p>
+          )}
+          {!loadingReports && filteredReports.length === 0 && (
+            <div className="empty-state">
+              No reports match these filters yet.
+            </div>
+          )}
+          {filteredReports.length > 0 && (
+            <ul className="list">
+              {filteredReports.map((r) => (
+                <li key={r._id} className="list-item">
+                  <div
+                    className="row-between"
+                    style={{ alignItems: "flex-start" }}
+                  >
+                    <div className="grow">
+                      <div className="fw-600">{r.title}</div>
+                      <div className="text-xs subtle">
+                        {r.date && new Date(r.date).toLocaleDateString()}{" "}
+                        {r.doctorName && `· Dr. ${r.doctorName}`}
+                      </div>
+                      {r.hospital && (
+                        <div className="text-xs subtle">{r.hospital}</div>
+                      )}
+                    </div>
+                    {r.filePath && (
+                      <SecureFileButton
+                        path={r.filePath}
+                        className="btn btn-soft btn-sm"
+                      >
+                        View report file
+                      </SecureFileButton>
+                    )}
+                  </div>
+                  {r.notes && (
+                    <div className="text-sm muted" style={{ marginTop: 6 }}>
+                      {r.notes}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <div className="grid-2" style={{ alignItems: "start" }}>
+        {/* 2. Report reader (free, runs on our server) */}
+        <section className="card-muted stack-sm">
+          <div>
+            <div className="row-sm" style={{ marginBottom: 4 }}>
+              <h3 className="card-title m-0">Understand your report</h3>
+              <span className="badge badge-plum">Report reader</span>
+            </div>
+            <p className="card-subtitle m-0">
+              Upload a lab report as a PDF or a clear photo. I&apos;ll read the
+              values (haemoglobin, thyroid, vitamin D, iron, sugar and more) and
+              flag anything outside the usual range. It{" "}
+              <strong>cannot diagnose or replace your doctor</strong>. The file
+              is deleted right after it&apos;s read.
+            </p>
+          </div>
+
+          <input
+            className="input"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            aria-label="Report file to read"
+            onChange={(e) => setAiFile(e.target.files[0] || null)}
+          />
+
+          <div>
+            <button
+              className="btn btn-primary"
+              onClick={handleExplainReport}
+              disabled={!aiFile || aiLoading}
+            >
+              {aiLoading ? "Reading your report…" : "Read my report"}
+            </button>
+          </div>
+
+          {reportFindings.length > 0 ? (
+            <div className="stack-sm">
+              <div className="text-sm muted">
+                {reportExplanation.split("\n")[0]}
+              </div>
+              <ul className="list">
+                {reportFindings.map((f) => (
+                  <li key={f.key} className="list-item stack-sm" style={{ gap: 4 }}>
+                    <div className="row-between">
+                      <span className="fw-600">{f.name}</span>
+                      <span
+                        className={`badge ${
+                          f.status === "normal"
+                            ? "badge-success"
+                            : f.status === "high"
+                            ? "badge-danger"
+                            : "badge-warning"
+                        }`}
+                      >
+                        {f.status === "normal" ? "Within range" : f.status === "high" ? "High" : "Low"}
+                      </span>
+                    </div>
+                    <div className="text-sm">
+                      <strong>
+                        {f.value.toLocaleString("en-IN")} {f.unit}
+                      </strong>{" "}
+                      <span className="subtle">
+                        · usual {f.range}
+                        {f.rangeSource === "report" ? " (from your report)" : ""}
+                      </span>
+                    </div>
+                    {f.note && <div className="text-sm muted">{f.note}</div>}
+                    {f.phaseDependent && f.status !== "normal" && (
+                      <div className="text-xs subtle">This hormone depends on your cycle day.</div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {reportNotice && <div className="alert alert-info text-sm">{reportNotice}</div>}
+            </div>
+          ) : (
+            reportExplanation && (
+              <div className="card-flat text-sm pre-wrap">{reportExplanation}</div>
+            )
+          )}
+        </section>
+
+        {/* 3. Doctor suggestions */}
+        <section className="card-muted stack-sm">
+          <div>
+            <h3 className="card-title">Find the right type of doctor</h3>
+            <p className="card-subtitle m-0">
+              Tell me what you’re mainly struggling with, and I’ll suggest{" "}
+              <strong>which kind of specialist</strong> might be suitable to
+              talk to. If you add your city, I’ll also give you quick search
+              links to find top-rated doctors near you.
+            </p>
+          </div>
+          <label className="field">
+            <span className="field-label">Main issue</span>
+            <input
+              className="input"
+              type="text"
+              placeholder="Main issue (e.g. heavy periods, PCOS, anxiety, hair fall, fever)"
+              value={doctorIssue}
+              onChange={(e) => setDoctorIssue(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">City</span>
+            <input
+              className="input"
+              type="text"
+              placeholder="Your city (e.g. Hyderabad, Noida)"
+              value={doctorCity}
+              onChange={(e) => setDoctorCity(e.target.value)}
+            />
+          </label>
+          <div>
+            <button
+              className="btn btn-primary"
+              onClick={handleDoctorSuggest}
+              disabled={!doctorIssue.trim() || doctorLoading}
+            >
+              {doctorLoading
+                ? "Thinking…"
+                : "Suggest doctor type & search links"}
+            </button>
+          </div>
+
+          {doctorSuggestion && (
+            <div className="card-flat stack-sm text-sm">
+              <div className="row-sm">
+                <span className="fw-600">Suggested specialty:</span>
+                <span className="badge badge-accent">
+                  {doctorSuggestion.specialty}
+                </span>
+              </div>
+              <p className="m-0">{doctorSuggestion.message}</p>
+
+              {doctorSuggestion.searchLinks && (
+                <div className="stack-sm">
+                  <div className="fw-600 text-sm">
+                    Where you can search for top-rated doctors:
+                  </div>
+                  <div className="row-sm">
+                    {doctorSuggestion.searchLinks.googleSearchUrl && (
+                      <a
+                        href={doctorSuggestion.searchLinks.googleSearchUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Google Search
+                      </a>
+                    )}
+                    {doctorSuggestion.searchLinks.googleMapsUrl && (
+                      <a
+                        href={doctorSuggestion.searchLinks.googleMapsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Google Maps
+                      </a>
+                    )}
+                    {doctorSuggestion.searchLinks.practoSearchUrl && (
+                      <a
+                        href={doctorSuggestion.searchLinks.practoSearchUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Practo
+                      </a>
+                    )}
+                  </div>
+                  {doctorSuggestion.note && (
+                    <p className="text-xs subtle m-0">
+                      {doctorSuggestion.note}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* 4. Comfort suggestions (non-medical), auto phase */}
+      <section className="card-muted stack-sm">
+        <div>
+          <div className="row-sm" style={{ marginBottom: 4 }}>
+            <h3 className="card-title m-0">Comfort suggestions</h3>
+            <span className="badge badge-warning">Not a cure</span>
+          </div>
+          <p className="card-subtitle m-0">
+            These are gentle ideas to make you a bit more comfortable (like
+            rest, warmth, hydration). They are <strong>not treatment</strong> –
+            always follow medical advice.
+          </p>
+        </div>
+        <div className="grid-2">
+          <label className="field">
+            <span className="field-label">Symptom</span>
+            <input
+              className="input"
+              type="text"
+              placeholder="Symptom (e.g. cramps, bloating, low mood, fatigue)"
+              value={remedySymptom}
+              onChange={(e) => setRemedySymptom(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Cycle phase</span>
+            <select
+              className="select"
+              value={remedyPhase}
+              onChange={(e) => setRemedyPhase(e.target.value)}
+            >
+              <option value="period">On period</option>
+              <option value="follicular">Follicular phase</option>
+              <option value="ovulation">Ovulation</option>
+              <option value="luteal">Luteal (PMS)</option>
+            </select>
+            <span className="field-hint">
+              Auto-picked from your period logs, but you can change it.
+            </span>
+          </label>
+        </div>
+        <div>
+          <button
+            className="btn btn-primary"
+            onClick={handleRemedySuggest}
+            disabled={!remedySymptom.trim() || remedyLoading}
           >
-            <ul>
+            {remedyLoading ? "Gathering tips…" : "Get comfort tips"}
+          </button>
+        </div>
+        {remedyResult && (
+          <div className="card-flat stack-sm text-sm">
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
               {remedyResult.tips?.map((t, i) => (
                 <li key={i}>{t}</li>
               ))}
             </ul>
             {remedyResult.warning && (
-              <p style={{ fontSize: 12, color: "#b91c1c" }}>
-                {remedyResult.warning}
-              </p>
+              <div className="alert alert-warning">{remedyResult.warning}</div>
             )}
           </div>
         )}
       </section>
 
-      {/* 5. Symptom log section */}
-      <section
-        style={{
-          padding: 12,
-          borderRadius: 12,
-          border: "1px solid #e5e7eb",
-          background: "#f9fafb",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Symptom log</h3>
-        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>
-          A small place to track things like cramps, headaches, mood changes,
-          etc. This stays here so you can remember what you’ve been feeling over
-          days or weeks.
-        </p>
-
-        <form
-          onSubmit={handleSymptomSubmit}
-          style={{ display: "grid", gap: 8, marginBottom: 12 }}
-        >
-          <input
-            type="text"
-            placeholder="Symptom (e.g. cramps, headache, low energy)"
-            value={symptomForm.symptom}
-            onChange={(e) =>
-              setSymptomForm({ ...symptomForm, symptom: e.target.value })
-            }
-          />
-          <label style={{ fontSize: 13 }}>
-            Severity (1 = very mild, 5 = very strong):
-          </label>
-          <input
-            type="range"
-            min={1}
-            max={5}
-            value={symptomForm.severity}
-            onChange={(e) =>
-              setSymptomForm({
-                ...symptomForm,
-                severity: Number(e.target.value),
-              })
-            }
-          />
-          <div style={{ fontSize: 12, color: "#6b7280" }}>
-            Current: {symptomForm.severity}/5
+      <div className="grid-2" style={{ alignItems: "start" }}>
+        {/* 5. Symptom log section */}
+        <section className="card-muted stack">
+          <div>
+            <h3 className="card-title">Symptom log</h3>
+            <p className="card-subtitle m-0">
+              A small place to track things like cramps, headaches, mood
+              changes, etc. This stays here so you can remember what you’ve
+              been feeling over days or weeks.
+            </p>
           </div>
-          <textarea
-            rows={2}
-            placeholder="Extra notes (e.g. when it started, what helped, any triggers)"
-            value={symptomForm.notes}
-            onChange={(e) =>
-              setSymptomForm({ ...symptomForm, notes: e.target.value })
-            }
-          />
-          <button type="submit" disabled={symptomLoading}>
-            {symptomLoading ? "Saving…" : "Save symptom"}
-          </button>
-        </form>
 
-        <h4 style={{ marginBottom: 6 }}>Recent symptoms</h4>
-        {symptomLoading && symptoms.length === 0 && (
-          <p style={{ fontSize: 13, color: "#6b7280" }}>
-            Loading your symptom history…
-          </p>
-        )}
-        {!symptomLoading && symptoms.length === 0 && (
-          <p style={{ fontSize: 13, color: "#6b7280" }}>
-            Nothing logged yet. You can start whenever you feel like tracking
-            what your body is telling you.
-          </p>
-        )}
-        {symptoms.map((s) => (
-          <div
-            key={s._id}
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #e5e7eb",
-              marginBottom: 6,
-              background: "white",
-              fontSize: 13,
-            }}
-          >
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              {new Date(s.dateTime || s.createdAt).toLocaleString()}{" "}
-              {s.cyclePhase && `· ${s.cyclePhase} phase`}
+          <form onSubmit={handleSymptomSubmit} className="stack-sm">
+            <label className="field">
+              <span className="field-label">Symptom</span>
+              <input
+                className="input"
+                type="text"
+                placeholder="Symptom (e.g. cramps, headache, low energy)"
+                value={symptomForm.symptom}
+                onChange={(e) =>
+                  setSymptomForm({ ...symptomForm, symptom: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="row-between">
+                <span className="field-label">
+                  Severity (1 = very mild, 5 = very strong)
+                </span>
+                <span className="badge badge-accent">
+                  Current: {symptomForm.severity}/5
+                </span>
+              </span>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                value={symptomForm.severity}
+                onChange={(e) =>
+                  setSymptomForm({
+                    ...symptomForm,
+                    severity: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Notes</span>
+              <textarea
+                className="textarea"
+                rows={2}
+                style={{ minHeight: 70 }}
+                placeholder="Extra notes (e.g. when it started, what helped, any triggers)"
+                value={symptomForm.notes}
+                onChange={(e) =>
+                  setSymptomForm({ ...symptomForm, notes: e.target.value })
+                }
+              />
+            </label>
+            <div>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={symptomLoading}
+              >
+                {symptomLoading ? "Saving…" : "Save symptom"}
+              </button>
             </div>
-            <div style={{ fontWeight: 600 }}>
-              {s.symptom} (severity {s.severity}/5)
-            </div>
-            {s.notes && <div style={{ marginTop: 2 }}>{s.notes}</div>}
+          </form>
+
+          <div className="stack-sm">
+            <h4 className="m-0">Recent symptoms</h4>
+            {symptomLoading && symptoms.length === 0 && (
+              <p className="text-sm muted m-0">
+                Loading your symptom history…
+              </p>
+            )}
+            {!symptomLoading && symptoms.length === 0 && (
+              <div className="empty-state">
+                Nothing logged yet. You can start whenever you feel like
+                tracking what your body is telling you.
+              </div>
+            )}
+            {symptoms.length > 0 && (
+              <ul className="list">
+                {symptoms.map((s) => (
+                  <li key={s._id} className="list-item text-sm">
+                    <div className="row-between">
+                      <span className="fw-600">{s.symptom}</span>
+                      <span
+                        className={`badge ${
+                          s.severity >= 4
+                            ? "badge-danger"
+                            : s.severity >= 3
+                            ? "badge-warning"
+                            : "badge-success"
+                        }`}
+                      >
+                        severity {s.severity}/5
+                      </span>
+                    </div>
+                    <div className="text-xs subtle">
+                      {new Date(s.dateTime || s.createdAt).toLocaleString()}{" "}
+                      {s.cyclePhase && `· ${s.cyclePhase} phase`}
+                    </div>
+                    {s.notes && (
+                      <div className="muted" style={{ marginTop: 4 }}>
+                        {s.notes}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        ))}
-      </section>
+        </section>
 
-      {/* 6. Schedule next appointment */}
-      <section
-        style={{
-          padding: 12,
-          borderRadius: 12,
-          border: "1px solid #e5e7eb",
-          background: "#f9fafb",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Schedule your next appointment</h3>
-        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 0 }}>
-          Add your upcoming doctor visit so you don’t have to keep everything in
-          your head.
-        </p>
-        <form onSubmit={handleApptSubmit} style={{ display: "grid", gap: 8 }}>
-          <input
-            type="text"
-            placeholder="Doctor name"
-            value={apptForm.doctorName}
-            onChange={(e) =>
-              setApptForm({ ...apptForm, doctorName: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="Specialty (e.g. Gynecologist)"
-            value={apptForm.specialty}
-            onChange={(e) =>
-              setApptForm({ ...apptForm, specialty: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="Location / hospital"
-            value={apptForm.location}
-            onChange={(e) =>
-              setApptForm({ ...apptForm, location: e.target.value })
-            }
-          />
-          <input
-            type="datetime-local"
-            value={apptForm.dateTime}
-            onChange={(e) =>
-              setApptForm({ ...apptForm, dateTime: e.target.value })
-            }
-          />
-          <button type="submit" disabled={apptLoading}>
-            {apptLoading ? "Saving…" : "Save appointment"}
-          </button>
-        </form>
-      </section>
+        {/* 6. Schedule next appointment */}
+        <section className="card-muted stack">
+          <div>
+            <h3 className="card-title">Schedule your next appointment</h3>
+            <p className="card-subtitle m-0">
+              Add your upcoming doctor visit so you don’t have to keep
+              everything in your head.
+            </p>
+          </div>
+          <form onSubmit={handleApptSubmit} className="stack-sm">
+            <label className="field">
+              <span className="field-label">Doctor</span>
+              <input
+                className="input"
+                type="text"
+                placeholder="Doctor name"
+                value={apptForm.doctorName}
+                onChange={(e) =>
+                  setApptForm({ ...apptForm, doctorName: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Specialty</span>
+              <input
+                className="input"
+                type="text"
+                placeholder="Specialty (e.g. Gynecologist)"
+                value={apptForm.specialty}
+                onChange={(e) =>
+                  setApptForm({ ...apptForm, specialty: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Location</span>
+              <input
+                className="input"
+                type="text"
+                placeholder="Location / hospital"
+                value={apptForm.location}
+                onChange={(e) =>
+                  setApptForm({ ...apptForm, location: e.target.value })
+                }
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Date &amp; time</span>
+              <input
+                className="input"
+                type="datetime-local"
+                value={apptForm.dateTime}
+                onChange={(e) =>
+                  setApptForm({ ...apptForm, dateTime: e.target.value })
+                }
+              />
+            </label>
+            <div>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={apptLoading}
+              >
+                {apptLoading ? "Saving…" : "Save appointment"}
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,98 @@ const { requireAuth } = require("../middleware/auth");
 // 🔹 models used by voice assistant intents
 const Appointment = require("../models/Appointment");
 const DiaryEntry = require("../models/DiaryEntry");
+const PeriodEntry = require("../models/PeriodEntry");
+const chrono = require("chrono-node");
+const { getCycleStats, startOfDay } = require("../utils/cycle");
+const { extractText, analyzeReportText } = require("../utils/reportAnalyzer");
+const fs = require("fs");
+
+/* ============================================================
+   Free natural-language helpers (no AI service needed)
+============================================================ */
+
+const SPLIT_TOKENS = [" also ", " and then ", " then ", " and also ", ". "];
+
+// Cut a sentence at the first "also / then" so one request doesn't swallow the next
+function firstClause(text) {
+  let clause = text;
+  for (const tok of SPLIT_TOKENS) {
+    const idx = clause.toLowerCase().indexOf(tok);
+    if (idx > 0) clause = clause.slice(0, idx);
+  }
+  return clause;
+}
+
+function tidyDoctorName(raw) {
+  let name = (raw || "")
+    .replace(/[,.;:!?]+$/g, "")
+    .replace(/\b(on|at|for|this|next|tomorrow|today|in|from)\s*$/i, "")
+    .trim()
+    .replace(/^(dr\.?|doctor)(\s+|$)/i, "")
+    .trim();
+  if (!name || /^(a|an|the|my)$/i.test(name)) return "";
+  name = name.replace(/\b\w/g, (c) => c.toUpperCase());
+  return `Dr ${name}`;
+}
+
+/**
+ * Understands e.g.
+ *   "fix an appointment with Dr Rao next Tuesday at 4pm"
+ *   "book doctor Meena tomorrow evening at 6"
+ *   "appointment on 12 December at 11 am with Dr Sricharan"
+ * Returns { doctorName, date, problem } where problem is
+ *   "no_doctor" | "no_date" | "no_time" | "past" | null
+ */
+function parseAppointmentRequest(rawContent, now = new Date()) {
+  // "Dr." -> "Dr", "a.m." -> "am", so full stops don't split the sentence
+  const content = rawContent
+    .replace(/\b(dr|mr|mrs|ms)\./gi, "$1")
+    .replace(/\b([ap])\.\s?m\b\.?/gi, "$1m");
+  const lower = content.toLowerCase();
+  const startMatch = lower.match(/\b(appointment|appt|book|schedule|fix)\b/);
+  const clause = firstClause(startMatch ? content.slice(startMatch.index) : content);
+
+  const results = chrono.parse(clause, now, { forwardDate: true });
+  const when = results[0];
+
+  // Doctor = words after "with" (or from "Dr"/"doctor"), excluding the date text
+  let doctorName = "";
+  const withMatch = clause.match(/\bwith\s+/i);
+  const drMatch = clause.match(/\b(dr\.?|doctor)\s+/i);
+  const nameStart = withMatch
+    ? withMatch.index + withMatch[0].length
+    : drMatch
+    ? drMatch.index
+    : -1;
+  if (nameStart !== -1) {
+    let nameEnd = clause.length;
+    if (when && when.index > nameStart) nameEnd = when.index;
+    doctorName = tidyDoctorName(clause.slice(nameStart, nameEnd));
+  }
+
+  if (!doctorName) return { problem: "no_doctor" };
+  if (!when) return { doctorName, problem: "no_date" };
+  if (!when.start.isCertain("hour")) return { doctorName, problem: "no_time" };
+  const date = when.start.date();
+  if (date < now) return { doctorName, date, problem: "past" };
+  return { doctorName, date, problem: null };
+}
+
+// "my period started yesterday" -> yesterday; no date given -> today; never in the future
+function parsePastDate(content, now = new Date()) {
+  const found = chrono.parse(content, now)[0];
+  if (!found) return now;
+  const d = found.start.date();
+  return d > now ? now : d;
+}
+
+function friendlyDate(d) {
+  return new Date(d).toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
 
 /* ============================================================
    MULTER SETUP FOR FILE-BASED REPORT EXPLANATION
@@ -26,7 +118,21 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const ALLOWED_REPORT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/bmp",
+];
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 }, // 10 MB, one file
+  fileFilter(req, file, cb) {
+    if (ALLOWED_REPORT_TYPES.includes(file.mimetype)) return cb(null, true);
+    cb(new Error("Please upload a PDF or an image (JPG, PNG, WEBP)."));
+  },
+});
 
 /* ============================================================
    1) VOICE ASSISTANT CHAT + MULTI-INTENT
@@ -83,7 +189,9 @@ router.post("/chat", requireAuth, async (req, res) => {
        A) DETECT INTENTS (can be more than one)
     ------------------------------------------------ */
 
-    const hasAppointment = text.includes("appointment with");
+    const hasAppointment =
+      /\b(appointment|appt)\b/.test(text) ||
+      (/\b(book|schedule)\b/.test(text) && /\b(dr\.?|doctor)\b/.test(text));
     const hasDiary =
       text.includes("write in my diary") ||
       text.includes("add to my diary") ||
@@ -95,15 +203,14 @@ router.post("/chat", requireAuth, async (req, res) => {
       text.includes("doctor should i see") ||
       text.includes("search doctor") ||
       text.includes("find a doctor");
-    const hasPeriodMention =
-      text.includes("log my period") ||
-      text.includes("period started") ||
-      text.includes("periods started") ||
-      text.includes("my period started") ||
-      text.includes("my periods started") ||
-      text.includes("i got my period") ||
-      text.includes("period ended") ||
-      text.includes("my period ended");
+    const hasPeriodEnd =
+      /\bperiods?\s+(has\s+|have\s+|is\s+|are\s+)?(ended|stopped|finished|over|done)\b/.test(text);
+    const hasPeriodStart =
+      !hasPeriodEnd &&
+      (/\bperiods?\s+(has\s+|have\s+)?(started|start|began|begun|came)\b/.test(text) ||
+        /\b(got|getting|log)\s+my\s+periods?\b/.test(text) ||
+        /\b(on|started)\s+my\s+periods?\b/.test(text));
+    const hasPeriodMention = hasPeriodStart || hasPeriodEnd;
 
     const replyParts = [];
     const intentSummary = {};
@@ -117,98 +224,53 @@ router.post("/chat", requireAuth, async (req, res) => {
     ------------------------------------------------ */
     if (hasAppointment) {
       try {
-        let clause = content;
-        const lower = text;
-        const startIdx = lower.indexOf("appointment with");
-        if (startIdx !== -1) {
-          clause = content.slice(startIdx);
-        }
+        const appt = parseAppointmentRequest(content);
+        const example =
+          "For example: “Book an appointment with Dr Rao next Tuesday at 4 pm.”";
 
-        const splitTokens = [" also ", " then ", " and then ", " and also "];
-        for (const tok of splitTokens) {
-          const idx = clause.toLowerCase().indexOf(tok);
-          if (idx !== -1) {
-            clause = clause.slice(0, idx);
-            break;
-          }
-        }
-
-        // clause is like: "appointment with doctor Tanmay on December 12 at 4pm"
-        const lowerClause = clause.toLowerCase();
-        const apptKey = "appointment with";
-        const apptPos = lowerClause.indexOf(apptKey);
-        let doctorName = "";
-        let dateTimeRaw = "";
-
-        if (apptPos !== -1) {
-          const afterAppt = clause.slice(apptPos + apptKey.length).trim(); // "doctor Tanmay on December 12 at 4pm"
-          const onIdx = afterAppt.toLowerCase().indexOf(" on ");
-          if (onIdx !== -1) {
-            const doctorPart = afterAppt.slice(0, onIdx).trim(); // "doctor Tanmay"
-            const datePart = afterAppt.slice(onIdx + 4).trim(); // "December 12 at 4pm"
-
-            doctorName = doctorPart.replace(/\s+/g, " ");
-
-            // normalize datePart
-            let dtRaw = datePart;
-
-            // sometimes STT says "is 4pm" instead of "at 4pm"
-            dtRaw = dtRaw.replace(/\bis\s+([0-9])/i, "at $1");
-
-            // remove day suffixes: 11th -> 11
-            dtRaw = dtRaw.replace(/(\d+)(st|nd|rd|th)/gi, "$1");
-
-            // normalize a.m./p.m. => am/pm
-            dtRaw = dtRaw.replace(
-              /\b([0-9: ]+)\s*(a\.?m\.?|p\.?m\.?)/gi,
-              (_, time, ap) => {
-                const cleanAp = ap.toLowerCase().startsWith("p") ? "pm" : "am";
-                return `${time.trim()} ${cleanAp}`;
-              }
-            );
-
-            // remove trailing polite words if present
-            dtRaw = dtRaw.replace(/\b(please|kindly)\b/gi, "").trim();
-
-            dateTimeRaw = dtRaw;
-          }
-        }
-
-        if (!doctorName || !dateTimeRaw) {
+        if (appt.problem === "no_doctor") {
           replyParts.push(
-            "I heard that you want to fix an appointment, but I couldn’t understand the details clearly. Try saying, for example: “Fix an appointment with Dr Sricharan on 11 December 2025 at 12 pm.”"
+            `I can book that appointment – which doctor is it with? ${example}`
           );
           intentSummary.appointment = { type: "appointment_not_parsed" };
+        } else if (appt.problem === "no_date") {
+          replyParts.push(
+            `When is your appointment with ${appt.doctorName}? ${example}`
+          );
+          intentSummary.appointment = { type: "appointment_parse_error" };
+        } else if (appt.problem === "no_time") {
+          replyParts.push(
+            `What time is your appointment with ${appt.doctorName}? Please say the day and time together, e.g. “tomorrow at 11 am”.`
+          );
+          intentSummary.appointment = { type: "appointment_parse_error" };
+        } else if (appt.problem === "past") {
+          replyParts.push(
+            `That time (${appt.date.toLocaleString()}) is already in the past, so I didn’t save it. Could you tell me the date again?`
+          );
+          intentSummary.appointment = { type: "appointment_parse_error" };
         } else {
-          const parsed = new Date(dateTimeRaw);
-          const isValidDate = !isNaN(parsed.getTime());
+          const appointment = await Appointment.create({
+            user: req.user._id,
+            doctorName: appt.doctorName,
+            specialty: "",
+            location: "",
+            dateTime: appt.date,
+          });
 
-          if (!isValidDate) {
-            replyParts.push(
-              "I understood you want to fix an appointment, but I couldn’t clearly read the date and time. Try saying it like: “Fix an appointment with Dr Sricharan on 11 December 2025 at 12 pm.”"
-            );
-            intentSummary.appointment = { type: "appointment_parse_error" };
-          } else {
-            const appointment = await Appointment.create({
-              user: req.user._id,
-              doctorName,
-              specialty: "",
-              location: "",
-              dateTime: parsed,
-              source: "voice_assistant",
-            });
+          const time = appt.date.toLocaleTimeString(undefined, {
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          replyParts.push(
+            `Okay, I’ve added this appointment:\n• Doctor: ${appt.doctorName}\n• When: ${friendlyDate(appt.date)} at ${time}\nYou’ll see it on your Wellness page under “Next appointment”.`
+          );
 
-            replyParts.push(
-              `Okay, I’ve added this appointment:\n• Doctor: ${doctorName}\n• When: ${parsed.toLocaleString()}\nYou’ll see it in your Wellness page under “Next appointment”.`
-            );
-
-            intentSummary.appointment = {
-              type: "appointment_created",
-              appointmentId: appointment._id,
-              doctorName,
-              dateTime: appointment.dateTime,
-            };
-          }
+          intentSummary.appointment = {
+            type: "appointment_created",
+            appointmentId: appointment._id,
+            doctorName: appt.doctorName,
+            dateTime: appointment.dateTime,
+          };
         }
       } catch (e) {
         console.error("Voice appointment create error:", e);
@@ -357,12 +419,74 @@ router.post("/chat", requireAuth, async (req, res) => {
        e.g. "my periods started today"
     ------------------------------------------------ */
     if (hasPeriodMention) {
-      const periodText =
-        "Thanks for telling me about your period. 🌸\n" +
-        "I’ve noted it mentally for our conversation.\n\n" +
-        "For proper tracking (cycle length, upcoming phases, reminders), please also log it in the **Period Tracker** tab – that’s where I calculate your phase and comfort tips.";
-      replyParts.push(periodText);
-      intentSummary.period = { type: "period_mentioned" };
+      try {
+        const day = startOfDay(parsePastDate(content));
+
+        if (hasPeriodStart) {
+          // Don't log the same day twice
+          const nextDay = new Date(day);
+          nextDay.setDate(nextDay.getDate() + 1);
+          const existing = await PeriodEntry.findOne({
+            user: req.user._id,
+            startDate: { $gte: day, $lt: nextDay },
+          });
+          if (!existing) {
+            await PeriodEntry.create({
+              user: req.user._id,
+              startDate: day,
+              flow: "moderate",
+            });
+          }
+
+          const entries = await PeriodEntry.find({ user: req.user._id })
+            .select("startDate endDate")
+            .lean();
+          const stats = getCycleStats(entries);
+          const basis = stats.isPersonalised
+            ? `your average ${stats.avgCycleLength}-day cycle`
+            : "a typical 28-day cycle";
+          const forecast = stats.nextPeriodDate
+            ? `Based on ${basis}, your next period is expected around ${friendlyDate(stats.nextPeriodDate)}.`
+            : "";
+          const logged = existing
+            ? "That day was already logged"
+            : `I’ve logged your period starting ${friendlyDate(day)}`;
+
+          replyParts.push(
+            `${logged}. 🌸 ${forecast}\n\nBe gentle with yourself – rest, warmth and water can help. When it ends, just tell me “my period ended”.`
+          );
+          intentSummary.period = { type: "period_started", date: day };
+        } else {
+          // Period ended: close the most recent period that started on or before that day
+          const endOfDay = new Date(day);
+          endOfDay.setDate(endOfDay.getDate() + 1);
+          const latest = await PeriodEntry.findOne({
+            user: req.user._id,
+            startDate: { $lt: endOfDay },
+          }).sort({ startDate: -1 });
+
+          if (!latest) {
+            replyParts.push(
+              "I couldn’t find a period to close. If your period started recently, tell me “my period started on …” first."
+            );
+            intentSummary.period = { type: "period_end_no_start" };
+          } else {
+            latest.endDate =
+              day < startOfDay(latest.startDate) ? latest.startDate : day;
+            await latest.save();
+            replyParts.push(
+              `Got it – I’ve marked your period as ended on ${friendlyDate(latest.endDate)}. 💜`
+            );
+            intentSummary.period = { type: "period_ended", date: latest.endDate };
+          }
+        }
+      } catch (e) {
+        console.error("Voice period log error:", e);
+        replyParts.push(
+          "I tried to log your period, but something went wrong. Please use the Cycle tracker tab instead."
+        );
+        intentSummary.period = { type: "period_error" };
+      }
     }
 
     /* -----------------------------------------------
@@ -642,24 +766,20 @@ router.post("/mood-suggestions", requireAuth, async (req, res) => {
 
 /* ============================================================
    3) TEXT REPORT EXPLANATION
-   POST /api/ai/report-explain
+   POST /api/ai/report-explain   { reportText }
+   Reads pasted lines like "TSH 6.5 mIU/L (0.4-4.0)" and flags them.
 ============================================================ */
+const SAFE_NOTICE =
+  "This is an automatic reading, not a medical diagnosis. Always discuss your results with your doctor.";
+
 router.post("/report-explain", requireAuth, async (req, res) => {
   try {
     const { reportText } = req.body;
     if (!reportText || !reportText.trim()) {
       return res.status(400).json({ error: "Report text is required" });
     }
-
-    const explanation =
-      "I can’t diagnose from this report, but here are some general pointers:\n\n" +
-      "- Lab reports usually show a value and a normal range for each marker.\n" +
-      "- Terms like Hb, RBC, WBC, TSH, etc. are different tests about blood or hormones.\n" +
-      "- Anything clearly marked as 'high' or 'low' should be discussed with your doctor.\n\n" +
-      "If you paste specific lines like “TSH: 6.5 mIU/L (0.4–4.0)” I can help explain what that marker usually means in simple language.\n\n" +
-      "Always use this only to understand words, not to decide treatment. Follow your doctor’s advice for all medical decisions.";
-
-    res.json({ explanation });
+    const { findings, explanation } = analyzeReportText(reportText);
+    res.json({ explanation, findings, safeNotice: SAFE_NOTICE });
   } catch (err) {
     console.error("report-explain error:", err);
     res.status(500).json({ error: "Server error" });
@@ -668,55 +788,50 @@ router.post("/report-explain", requireAuth, async (req, res) => {
 
 /* ============================================================
    3B) FILE REPORT EXPLANATION
-   POST /api/ai/report-explain-file
+   POST /api/ai/report-explain-file   (multipart, field "file")
+   PDF -> text layer; photo/scan -> free OCR (tesseract.js).
+   The uploaded file is deleted as soon as it has been read.
 ============================================================ */
-router.post(
-  "/report-explain-file",
-  requireAuth,
-  upload.single("file"),
-  async (req, res) => {
+router.post("/report-explain-file", requireAuth, (req, res) => {
+  upload.single("file")(req, res, async (uploadErr) => {
+    if (uploadErr) {
+      const message =
+        uploadErr.code === "LIMIT_FILE_SIZE"
+          ? "That file is too big – please upload a report under 10 MB."
+          : uploadErr.message || "Upload failed";
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "Report file is required" });
+    }
+
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: "Report file is required" });
+      const { text, method } = await extractText(req.file.path, req.file.mimetype);
+
+      if (method === "pdf" && text.trim().length < 20) {
+        return res.json({
+          explanation:
+            "This PDF looks like a scanned image, so there's no text inside it for me to read.\n\nTip: take a clear photo or screenshot of the results page and upload that image instead – I can read photos.",
+          findings: [],
+          method,
+          safeNotice: SAFE_NOTICE,
+        });
       }
 
-      const explanation = `
-I’ve received your report file: "${req.file.originalname}".
-
-Right now, I can’t directly read or extract exact numbers from the file inside this app.  
-But here’s how you can look at most medical reports in a simple way:
-
-1) **Look for the summary / impression section**  
-   This usually appears near the end of the report and tells you, in a few lines, what the main finding is.
-
-2) **Check each test/value row**  
-   Many reports show:
-   - Name of the test or measurement  
-   - Your value  
-   - A “normal” or reference range  
-
-   Anything clearly marked as “high”, “low”, or highlighted should be discussed with your doctor.
-
-3) **Ask: is this urgent or routine?**  
-   - Very abnormal or emergency results are usually highlighted, and your doctor will clearly mention them.  
-   - Mild variations are often monitored over time.
-
-If you’d like more help here, you can copy-paste the important values or lines (for example “TSH 6.5 mIU/L, normal range 0.4–4.0”) into the text explanation box. I can then explain those terms in simple language.
-
-This space is only to help you feel a bit less confused. It **cannot** replace a real doctor’s advice or diagnosis.
-      `.trim();
-
-      return res.json({
-        explanation,
-        safeNotice:
-          "This is general AI guidance, not a medical diagnosis. Always consult your doctor for report interpretation.",
-      });
+      const { findings, explanation } = analyzeReportText(text);
+      return res.json({ explanation, findings, method, safeNotice: SAFE_NOTICE });
     } catch (err) {
       console.error("report-explain-file error:", err);
-      res.status(500).json({ error: "Server error" });
+      return res.status(500).json({
+        error:
+          "I couldn't read this file. If it's a photo, make sure it's clear and well lit, then try again.",
+      });
+    } finally {
+      // Privacy: this upload was only needed for this one reading
+      fs.unlink(req.file.path, () => {});
     }
-  }
-);
+  });
+});
 
 /* ============================================================
    4) DOCTOR TYPE SUGGESTION + SMART SEARCH LINKS (NO GOOGLE API)

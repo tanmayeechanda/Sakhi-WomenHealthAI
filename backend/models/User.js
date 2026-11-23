@@ -23,6 +23,12 @@ const UserSchema = new mongoose.Schema(
     dob: {
       type: Date,
     },
+    // How this account signs in: "local" (email + password) or "google"
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
     resetPasswordToken: {
       type: String,
     },
