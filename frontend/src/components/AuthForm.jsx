@@ -140,7 +140,7 @@ function AuthForm({ onAuthSuccess }) {
           <div className="brand-mark">
             <BrandIcon size={18} />
           </div>
-          <div className="brand-name">Women&apos;s Health AI</div>
+          <div className="brand-name">Sakhi</div>
         </div>
 
         <div style={{ position: "relative", zIndex: 1 }}>

@@ -192,7 +192,7 @@ router.post("/forgot-password", forgotPasswordLimiter, async (req, res) => {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: user.email,
-      subject: "Reset your password - Women's Health AI",
+      subject: "Reset your password - Sakhi",
       text: `You requested a password reset.\n\nClick this link to set a new password (valid for 1 hour):\n\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
     };
 

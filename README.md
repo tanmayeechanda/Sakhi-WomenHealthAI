@@ -1,4 +1,6 @@
-# Women's Health AI 🌸
+# Sakhi 🌸
+
+*Sakhi (सखी) means "a close friend" in Hindi and Sanskrit, and that's exactly what this app tries to be.*
 
 **A calm, private space to track your cycle, write down how you feel, keep your medical reports in one place, and talk things through with a gentle voice assistant.**
 
@@ -12,7 +14,7 @@ Most health apps feel either clinical or noisy. I wanted something that feels li
 
 Women's health gets scattered fast. Period dates live in one app, lab reports sit in a WhatsApp chat, the gynaecologist's appointment is a sticky note, and how you actually *felt* that week isn't written down anywhere. When you finally sit with a doctor, you're trying to remember all of it from memory.
 
-Women's Health AI puts all of that in one place, behind your own login, and adds a little warmth on top: a voice assistant you can just talk to, mood-based suggestions, and plain-English explanations of your lab values.
+Sakhi puts all of that in one place, behind your own login, and adds a little warmth on top: a voice assistant you can just talk to, mood-based suggestions, and plain-English explanations of your lab values.
 
 > 💛 **Please note:** this app is a companion, not a doctor. It never diagnoses anything. If something feels wrong, please see a real healthcare professional.
 
@@ -190,7 +192,7 @@ Ideas and pull requests are very welcome.
 
 ## A gentle reminder
 
-Women's Health AI is here to help you stay organised and feel supported. It is **not** a medical device and does **not** give diagnoses. For anything that worries you, such as severe pain, very heavy bleeding, or thoughts of harming yourself, please reach out to a doctor or a local emergency helpline straight away. 💜
+Sakhi is here to help you stay organised and feel supported. It is **not** a medical device and does **not** give diagnoses. For anything that worries you, such as severe pain, very heavy bleeding, or thoughts of harming yourself, please reach out to a doctor or a local emergency helpline straight away. 💜
 
 ---
 

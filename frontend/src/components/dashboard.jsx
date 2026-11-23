@@ -108,7 +108,7 @@ function Dashboard({ user, token, onLogout }) {
         <BrandIcon size={18} />
       </div>
       <div>
-        <div className="brand-name">Women&apos;s Health AI</div>
+        <div className="brand-name">Sakhi</div>
         <div className="brand-tag">Your wellness companion</div>
       </div>
     </div>
